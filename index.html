@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cacutie Style | Your Style, Your Story.</title>
+<meta name="description" content="Cacutie Style: toko fashion online untuk wanita, pria, dan aksesori.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip" href="#app">Lewati ke konten</a>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <a class="logo" href="#/" aria-label="Cacutie Style, ke beranda">Cacutie Style<small>Your Style, Your Story.</small></a>
+      <nav class="main" id="nav" aria-label="Menu utama">
+        <a href="#/" data-r="home">Beranda</a>
+        <a href="#/produk" data-r="produk">Semua Produk</a>
+        <a href="#/produk?kat=Wanita">Wanita</a>
+        <a href="#/produk?kat=Pria">Pria</a>
+        <a href="#/produk?kat=Aksesori">Aksesori</a>
+        <a href="#/tentang" data-r="tentang">Tentang Kami</a>
+        <a href="#/lacak" data-r="lacak">Lacak Pesanan</a>
+      </nav>
+      <div class="actions">
+        <button class="icon-btn" id="btnSearch" aria-label="Cari produk" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        </button>
+        <a class="icon-btn" href="#/keranjang" aria-label="Keranjang belanja">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8a3 3 0 016 0"/></svg>
+          <span class="badge" id="cartCount" hidden>0</span>
+        </a>
+        <button class="icon-btn burger" id="btnMenu" aria-label="Buka menu" aria-expanded="false" aria-controls="nav">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="searchbar" id="searchbar">
+      <form id="searchForm" role="search">
+        <label class="sr" for="q">Cari produk</label>
+        <input id="q" type="search" placeholder="Cari nama produk atau SKU" autocomplete="off">
+        <button class="btn" type="submit">Cari</button>
+      </form>
+    </div>
+  </div>
+</header>
+
+<main id="app" class="wrap" tabindex="-1"></main>
+
+<footer>
+  <div class="wrap fgrid">
+    <div>
+      <h3>Cacutie Style</h3>
+      <p id="fSlogan">Your Style, Your Story.</p>
+      <p class="muted" style="color:var(--beige)">Contoh produk di website ini hanya untuk demonstrasi tugas kuliah.</p>
+    </div>
+    <div>
+      <h3>Belanja</h3>
+      <ul>
+        <li><a href="#/produk">Semua Produk</a></li>
+        <li><a href="#/lacak">Lacak Pesanan</a></li>
+        <li><a href="#/faq">FAQ &amp; Cara Belanja</a></li>
+        <li><a href="#/tentang">Tentang &amp; Kontak</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>Informasi</h3>
+      <ul>
+        <li><a href="#/privasi">Kebijakan Privasi</a></li>
+        <li><a href="#/pengembalian">Kebijakan Pengembalian</a></li>
+      </ul>
+      <p id="fContact" class="muted" style="color:var(--beige)"></p>
+    </div>
+  </div>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
