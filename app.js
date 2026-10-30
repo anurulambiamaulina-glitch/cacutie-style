@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 const A = window.CSApi, app = document.getElementById("app");
-const S = { products: null, settings: {}, idx: {}, co: { step: 2, form: {}, metode: "Transfer Bank", key: null, done: null } };
+const S = { cust: null, couriers: [], ads: [], products: null, settings: {}, idx: {}, co: { step: 2, form: {}, metode: "Transfer Bank", key: null, done: null } };
 const CART_KEY = "cs_cart_v1", ORD_KEY = "cs_orders_v1";
 
 /* ---------- Util ---------- */
@@ -34,14 +34,9 @@ function addToCart(vid, qty) {
 
 /* ---------- Data ---------- */
 function indexData() { S.idx = {}; S.products.forEach(p => p.varian.forEach(v => { S.idx[v.id] = { p, v }; })); }
-function fillFooter() {
-  const st = S.settings;
-  $("#fSlogan").textContent = st.slogan || "Your Style, Your Story.";
-  $("#fContact").innerHTML = [st.whatsapp_toko ? "WhatsApp: +" + esc(st.whatsapp_toko) : "", st.email_toko ? esc(st.email_toko) : "", esc(st.jam_operasional || "")].filter(Boolean).join("<br>");
-}
 function ensureData(force) {
   if (S.products && !force) return Promise.resolve();
-  return Promise.all([A.products(), A.settings()]).then(r => { S.products = r[0]; S.settings = r[1]; indexData(); fillFooter(); });
+  return A.bootstrap().then(r => { S.products = r.products; S.settings = r.settings; S.couriers = r.couriers; S.ads = r.ads; indexData(); });
 }
 function withData(fn, force) {
   loading();
@@ -52,8 +47,10 @@ function withData(fn, force) {
 }
 
 /* ---------- Komponen ---------- */
+// Tautan Google Drive otomatis diubah menjadi tautan gambar langsung (file harus dibagikan "Siapa saja yang memiliki link")
+const imgSrc = u => { u = String(u || ""); const m = u.match(/drive\.google\.com\/file\/d\/([\w-]+)/) || u.match(/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)/); return m ? "https://drive.google.com/thumbnail?id=" + m[1] + "&sz=w800" : u; };
 function imgHtml(p) {
-  if (p.gambar) return `<img src="${esc(p.gambar)}" alt="${esc(p.nama)}" loading="lazy" data-ph="${esc(p.nama)}">`;
+  if (p.gambar) return `<img src="${esc(imgSrc(p.gambar))}" alt="${esc(p.nama)}" loading="lazy" data-ph="${esc(p.nama)}">`;
   return `<div class="ph">${esc(p.nama)}</div>`;
 }
 document.addEventListener("error", e => { // gambar gagal dimuat -> tampilkan penanda nama produk
@@ -67,11 +64,12 @@ function pcard(p) {
     <div class="meta"><h3>${esc(p.nama)}</h3><div class="price">${rp(p.harga)}</div><div class="muted">${esc(p.kategori)} - ${warna} warna</div></div></a>`;
 }
 const stars = n => "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n));
-const shipCost = sub => { const st = S.settings, f = Number(st.ongkir_flat) || 0, free = Number(st.gratis_ongkir_min) || 0; return (free > 0 && sub >= free) ? 0 : f; };
+const courier = id => (S.couriers || []).find(k => k.id === id);
 
 /* ---------- Router ---------- */
 function parseQs(s) { const o = {}; s.split("&").forEach(p => { if (!p) return; const i = p.indexOf("="); o[decodeURIComponent(i < 0 ? p : p.slice(0, i))] = i < 0 ? "" : decodeURIComponent(p.slice(i + 1).replace(/\+/g, " ")); }); return o; }
 function route() {
+  if ($("#shop").hidden) return;
   const h = location.hash.replace(/^#/, "") || "/", qi = h.indexOf("?");
   const parts = (qi < 0 ? h : h.slice(0, qi)).split("/").filter(Boolean), qs = parseQs(qi < 0 ? "" : h.slice(qi + 1));
   const name = parts[0] || "home";
@@ -84,33 +82,37 @@ function route() {
     case "keranjang": return withData(vCart);
     case "checkout": return withData(vCheckout, true);
     case "lacak": return withData(() => vTrack(qs.kode || ""));
-    case "tentang": case "faq": case "privasi": case "pengembalian": return withData(() => vInfo(name));
+    case "faq": return withData(vInfo);
+    case "masuk": return vAuth();
+    case "akun": return vAccount();
     default: show(`<div class="empty"><h2>Halaman tidak ditemukan</h2><p>Alamat yang kamu buka tidak tersedia.</p><a class="btn" href="#/">Kembali ke beranda</a></div>`);
   }
 }
 
 /* ---------- Beranda ---------- */
+function adHtml(a) {
+  const ext = /^https:/.test(a.tautan || "");
+  const btn = a.tautan && a.tombol ? `<a class="btn sm" href="${esc(a.tautan)}" ${ext ? 'target="_blank" rel="noopener"' : ""}>${esc(a.tombol)}</a>` : "";
+  return `<div class="ad">${a.gambar ? `<div class="adimg"><img src="${esc(imgSrc(a.gambar))}" alt="" loading="lazy"></div>` : ""}<div class="adtxt"><small class="muted">Iklan</small><h3>${esc(a.judul)}</h3>${a.teks ? `<p>${esc(a.teks)}</p>` : ""}${btn}</div></div>`;
+}
 function vHome() {
-  const P = S.products, st = S.settings;
+  const P = S.products, st = S.settings, ads = S.ads || [];
   const feat = P.filter(p => p.label === "Bestseller").concat(P.filter(p => p.label !== "Bestseller")).slice(0, 4);
   const latest = P.slice().sort((a, b) => String(b.dibuat).localeCompare(String(a.dibuat))).slice(0, 4);
-  const free = Number(st.gratis_ongkir_min) || 0;
   show(`
   <section class="hero"><div><h1>${esc(st.nama_toko || "Cacutie Style")}</h1>
     <p style="font-size:1.15rem">${esc(st.slogan || "Your Style, Your Story.")}<br><span class="muted">Fashion wanita, pria, dan aksesori yang manis, simpel, dan mudah dipadukan.</span></p>
     <a class="btn" href="#/produk">Belanja Sekarang</a></div>
-    <div class="art" aria-hidden="true">Your Style,<br>Your Story.</div></section>
+    <div class="art"><img src="assets/logo.svg" alt="Logo Cacutie Style"></div></section>
+  ${ads.length ? `<section class="section"><div class="ads">${ads.map(adHtml).join("")}</div></section>` : ""}
   <section class="section"><h2>Kategori</h2><div class="cats">
     <a class="cat" href="#/produk?kat=Wanita">Wanita</a><a class="cat" href="#/produk?kat=Pria">Pria</a><a class="cat" href="#/produk?kat=Aksesori">Aksesori</a></div></section>
   <section class="section"><h2>Produk unggulan</h2><div class="grid">${feat.map(pcard).join("")}</div></section>
-  <section class="section"><div class="promo"><div><h2>${free > 0 ? "Gratis ongkir untuk belanja " + rp(free) + " ke atas" : "Belanja tanpa ribet"}</h2>
-    <p style="margin:0">${free > 0 ? "Berlaku otomatis saat checkout." : "Checkout cukup isi data pengiriman, tanpa perlu akun."}</p></div><a class="btn" href="#/produk">Belanja Sekarang</a></div></section>
   <section class="section"><h2>Produk terbaru</h2><div class="grid">${latest.map(pcard).join("")}</div></section>
   <section class="section"><h2>Kenapa belanja di sini</h2><div class="why">
     <div class="card"><h3>Stok jelas per varian</h3><p class="muted">Setiap warna dan ukuran punya stok sendiri, jadi kamu tahu mana yang masih tersedia.</p></div>
-    <div class="card"><h3>Checkout tanpa akun</h3><p class="muted">Pilih produk, isi data pengiriman, dan pesanan langsung tercatat. Tidak perlu daftar.</p></div>
-    <div class="card"><h3>Pesanan bisa dilacak</h3><p class="muted">Pakai nomor pesanan dan nomor WhatsApp yang kamu isi saat checkout.</p></div></div></section>
-  <section class="section card"><h2>Tentang Cacutie Style</h2><p class="muted" style="margin:0">Toko fashion online untuk anak muda dan mahasiswa. Produk di website ini adalah data contoh untuk tugas mata kuliah E-Commerce. <a href="#/tentang">Selengkapnya</a></p></section>`);
+    <div class="card"><h3>Pilih jasa kirim sendiri</h3><p class="muted">Setiap jasa kirim punya ongkir berbeda. Pilih yang paling pas saat checkout.</p></div>
+    <div class="card"><h3>Tanpa akun juga bisa</h3><p class="muted">Belanja sebagai tamu, atau buat akun kalau ingin riwayat pesanan tersimpan.</p></div></div></section>`);
 }
 
 /* ---------- Katalog ---------- */
@@ -158,7 +160,7 @@ function vDetail(id) {
     <div class="pimg" style="border-radius:var(--r)">${imgHtml(p)}${p.label ? `<span class="tag">${esc(p.label)}</span>` : ""}</div>
     <div><h1 style="font-size:1.8rem">${esc(p.nama)}</h1><p class="muted">SKU: ${esc(p.sku)} - ${esc(p.kategori)}</p>
       <p class="price" style="font-size:1.5rem">${rp(p.harga)}</p><p>${esc(p.deskripsi)}</p><div id="opts"></div>
-      <div class="notice"><b>Pengiriman:</b> ${esc(st.info_pengiriman || "Ongkir mengikuti tarif flat toko.")}<br><b>Pengembalian:</b> <a href="#/pengembalian">lihat kebijakan</a></div></div></div>
+      <div class="notice"><b>Pengiriman:</b> ${esc(st.info_pengiriman || "Pilih jasa kirim saat checkout.")}</div></div></div>
     <div class="section"><h2>Ulasan pembeli</h2><div id="rev"><div class="loading"><div class="spin"></div>Memuat ulasan...</div></div></div></section>`);
   function paint() {
     const cv = sel.w && sel.u ? find(sel.w, sel.u) : null, avail = cv ? cv.stok - inCart(cv.id) : 0;
@@ -194,22 +196,9 @@ function vDetail(id) {
   });
   paint();
   A.reviews(p.id).then(r => {
-    $("#rev").innerHTML = `<p>${r.jumlah ? `<span class="stars">${stars(r.rata_rata)}</span> ${r.rata_rata} dari 5 (${r.jumlah} ulasan)` : "Belum ada ulasan yang disetujui."}</p>
-      ${r.ulasan.map(u => `<div class="card" style="margin-bottom:10px"><b>${esc(u.nama)}</b> <span class="stars">${stars(u.rating)}</span> <span class="muted">${esc(u.tanggal)}</span><p style="margin:6px 0 0">${esc(u.komentar)}</p></div>`).join("")}
-      <div class="card"><h3>Tulis ulasan</h3><p class="muted">Ulasan tampil setelah disetujui admin. Ulasan belum diverifikasi sebagai pembelian.</p>
-      <div class="field" id="r-nama"><label for="rvName">Nama tampilan (boleh nama panggilan)</label><input id="rvName" maxlength="30" autocomplete="nickname"><div class="err"></div></div>
-      <div class="field" id="r-rating"><label for="rvRating">Rating</label><select id="rvRating"><option value="">Pilih rating</option><option value="5">5 - Sangat bagus</option><option value="4">4 - Bagus</option><option value="3">3 - Cukup</option><option value="2">2 - Kurang</option><option value="1">1 - Buruk</option></select><div class="err"></div></div>
-      <div class="field" id="r-text"><label for="rvText">Ulasan (5-500 karakter)</label><textarea id="rvText" maxlength="500"></textarea><div class="err"></div></div>
-      <div id="rvMsg"></div><button class="btn" id="rvSend" data-loading="Mengirim...">Kirim Ulasan</button></div>`;
-    $("#rvSend").onclick = () => {
-      const n = $("#rvName").value.trim(), r = $("#rvRating").value, t = $("#rvText").value.trim(); let bad = false;
-      const chk = (id, ok, msg) => { const f = $("#" + id); f.classList.toggle("bad", !ok); $(".err", f).textContent = ok ? "" : msg; if (!ok) bad = true; };
-      chk("r-nama", n.length >= 2, "Isi nama tampilan minimal 2 karakter."); chk("r-rating", !!r, "Pilih rating 1 sampai 5."); chk("r-text", t.length >= 5, "Tulis ulasan minimal 5 karakter.");
-      if (bad) return;
-      A.busy($("#rvSend"), () => A.submitReview({ product_id: p.id, nama: n, rating: Number(r), komentar: t }))
-        .then(res => { if (res) { $("#rvMsg").innerHTML = notice(res.message, "ok"); $("#rvText").value = ""; } })
-        .catch(e => { $("#rvMsg").innerHTML = notice(e.message, "error"); });
-    };
+    $("#rev").innerHTML = `<p>${r.jumlah ? `<span class="stars">${stars(r.rata_rata)}</span> ${r.rata_rata} dari 5 (${r.jumlah} ulasan)` : "Belum ada ulasan."}</p>
+      ${r.ulasan.map(u => `<div class="card" style="margin-bottom:10px"><b>${esc(u.nama)}</b> <span class="stars">${stars(u.rating)}</span> ${u.terverifikasi ? '<span class="pill">Pembeli terverifikasi</span>' : ""} <span class="muted">${esc(u.tanggal)}</span><p style="margin:6px 0 0">${esc(u.komentar)}</p></div>`).join("")}
+      <p class="muted">Sudah membeli? Beri ulasan lewat menu <a href="#/lacak">Lacak Pesanan</a> setelah pesananmu berstatus Selesai.</p>`;
   }).catch(e => { $("#rev").innerHTML = notice("Ulasan belum bisa dimuat: " + e.message, "warn"); });
 }
 
@@ -267,42 +256,45 @@ function vCheckout() {
   S.co.step === 3 ? stepSummary(c) : stepForm();
 }
 function stepForm() {
-  const f = S.co.form;
-  show(`<section class="section"><h1>Checkout</h1>${stepsBar(2)}<div class="card" style="max-width:640px"><h2>Data pengiriman</h2><p class="muted">Tanpa login. Data hanya dipakai untuk memproses pesanan ini.</p>
+  const f = Object.assign({ nama: S.cust ? S.cust.nama : "", wa: S.cust ? S.cust.whatsapp : "" }, S.co.form);
+  show(`<section class="section"><h1>Checkout</h1>${stepsBar(2)}<div class="card" style="max-width:640px"><h2>Data pengiriman</h2><p class="muted">${S.cust ? "Masuk sebagai " + esc(S.cust.email) + ". Pesanan ini tersimpan di akunmu." : "Belanja sebagai tamu, tanpa login. <a href=\"#/masuk\">Masuk atau buat akun</a> (opsional)."}</p>
     <div class="field" id="f-nama"><label for="nama">Nama penerima</label><input id="nama" maxlength="60" autocomplete="name" value="${esc(f.nama || "")}"><div class="err"></div></div>
     <div class="field" id="f-wa"><label for="wa">Nomor WhatsApp</label><input id="wa" inputmode="tel" autocomplete="tel" placeholder="081234567890" value="${esc(f.wa || "")}"><div class="err"></div></div>
     <div class="field" id="f-alamat"><label for="alamat">Alamat lengkap</label><textarea id="alamat" maxlength="300" autocomplete="street-address">${esc(f.alamat || "")}</textarea><div class="err"></div></div>
     <div class="field" id="f-kota"><label for="kota">Kota / kecamatan</label><input id="kota" maxlength="60" value="${esc(f.kota || "")}"><div class="err"></div></div>
     <div class="field"><label for="cat">Catatan pesanan (opsional)</label><textarea id="cat" maxlength="200">${esc(f.catatan || "")}</textarea></div>
-    <div class="field"><label for="kirim">Pengiriman</label><select id="kirim" disabled><option>Reguler - tarif flat toko</option></select></div>
+    <div class="field" id="f-kurir"><label for="kirim">Jasa kirim</label><select id="kirim"><option value="">Pilih jasa kirim</option>${(S.couriers || []).map(k => `<option value="${esc(k.id)}" ${f.kurir === k.id ? "selected" : ""}>${esc(k.nama)} - ${rp(k.tarif)}${k.estimasi ? " (" + esc(k.estimasi) + ")" : ""}</option>`).join("")}</select><div class="err"></div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn ghost" href="#/keranjang">Kembali ke keranjang</a><button class="btn" id="next">Lanjut ke ringkasan</button></div></div></section>`);
   $("#next").onclick = () => {
-    const v = { nama: $("#nama").value.trim(), wa: $("#wa").value.trim(), alamat: $("#alamat").value.trim(), kota: $("#kota").value.trim(), catatan: $("#cat").value.trim() };
-    let bad = false; const chk = (id, ok, msg) => { const el = $("#" + id); el.classList.toggle("bad", !ok); $(".err", el).textContent = ok ? "" : msg; if (!ok && !bad) { bad = true; $("input,textarea", el).focus(); } };
+    const v = { nama: $("#nama").value.trim(), wa: $("#wa").value.trim(), alamat: $("#alamat").value.trim(), kota: $("#kota").value.trim(), catatan: $("#cat").value.trim(), kurir: $("#kirim").value };
+    let bad = false; const chk = (id, ok, msg) => { const el = $("#" + id); el.classList.toggle("bad", !ok); $(".err", el).textContent = ok ? "" : msg; if (!ok && !bad) { bad = true; $("input,textarea,select", el).focus(); } };
     chk("f-nama", v.nama.length >= 2, "Isi nama penerima minimal 2 karakter.");
     chk("f-wa", !!normWa(v.wa), "Nomor WhatsApp belum benar. Contoh: 081234567890.");
     chk("f-alamat", v.alamat.length >= 10, "Isi alamat lengkap (jalan, nomor, RT/RW), minimal 10 karakter.");
     chk("f-kota", v.kota.length >= 2, "Isi kota atau kecamatan tujuan.");
+    chk("f-kurir", !!v.kurir, "Pilih jasa kirim terlebih dahulu.");
     if (bad) return;
     S.co.form = v; S.co.step = 3; vCheckout();
   };
 }
 function stepSummary(c) {
-  const f = S.co.form, ong = shipCost(c.sub), tot = c.sub + ong, st = S.settings;
+  const f = S.co.form, kr = courier(f.kurir);
+  if (!kr) { S.co.step = 2; toast("Jasa kirim yang kamu pilih tidak tersedia. Pilih ulang.", "error"); return stepForm(); }
+  const ong = kr.tarif, tot = c.sub + ong;
   show(`<section class="section"><h1>Checkout</h1>${stepsBar(3)}<div class="layout2"><div>
     <div class="card" style="margin-bottom:16px"><h2>Dikirim ke</h2><p style="margin:0"><b>${esc(f.nama)}</b> - ${esc(f.wa)}<br>${esc(f.alamat)}, ${esc(f.kota)}${f.catatan ? "<br><span class='muted'>Catatan: " + esc(f.catatan) + "</span>" : ""}</p><button class="link" id="edit">Ubah data pengiriman</button></div>
     <div class="card"><h2>Metode pembayaran</h2><p class="muted">Pembayaran manual. Website ini belum memakai payment gateway.</p>
       <label class="pay"><input type="radio" name="pay" value="Transfer Bank" ${S.co.metode === "Transfer Bank" ? "checked" : ""}><span><b>Transfer Bank (manual)</b><br><span class="muted">Instruksi rekening tampil setelah pesanan dibuat. Status berubah setelah admin memeriksa pembayaranmu.</span></span></label>
       <label class="pay"><input type="radio" name="pay" value="Konfirmasi via WhatsApp" ${S.co.metode === "Konfirmasi via WhatsApp" ? "checked" : ""}><span><b>Konfirmasi via WhatsApp</b><br><span class="muted">Pembayaran diatur langsung dengan admin lewat WhatsApp.</span></span></label></div></div>
     <aside class="card sum"><h2>Ringkasan pesanan</h2>${c.lines.map(l => `<div><span>${esc(l.r.p.nama)}<br><span class="muted">${esc(l.r.v.warna)}, ${esc(l.r.v.ukuran)} x ${l.it.qty}</span></span><span>${rp(l.r.p.harga * l.it.qty)}</span></div>`).join("")}
-      <div><span>Subtotal</span><span>${rp(c.sub)}</span></div><div><span>Ongkir (tarif flat toko)</span><span>${ong ? rp(ong) : "Gratis"}</span></div><div class="tot"><span>Total</span><span>${rp(tot)}</span></div>
+      <div><span>Subtotal</span><span>${rp(c.sub)}</span></div><div><span>Ongkir (${esc(kr.nama)})</span><span>${ong ? rp(ong) : "Gratis"}</span></div><div class="tot"><span>Total</span><span>${rp(tot)}</span></div>
       <p class="muted">Total akhir dihitung ulang oleh server dari harga di database.</p><div id="coMsg"></div>
       <div style="display:grid;gap:10px"><button class="btn" id="place" data-loading="Membuat pesanan...">Buat Pesanan</button><a class="btn ghost" href="#/keranjang">Ubah keranjang</a></div></aside></div></section>`);
   $("#edit").onclick = () => { S.co.step = 2; vCheckout(); };
   $$("input[name=pay]").forEach(r => r.onchange = () => { S.co.metode = r.value; });
   $("#place").onclick = () => {
     S.co.key = S.co.key || A.newKey(); // kunci sama dipakai ulang saat coba lagi, jadi tidak membuat pesanan ganda
-    const body = { nama: f.nama, whatsapp: f.wa, alamat: f.alamat, kota: f.kota, catatan: f.catatan, metode_bayar: S.co.metode, client_key: S.co.key,
+    const body = { nama: f.nama, whatsapp: f.wa, alamat: f.alamat, kota: f.kota, catatan: f.catatan, kurir: f.kurir, metode_bayar: S.co.metode, client_key: S.co.key,
       items: c.lines.map(l => ({ variant_id: l.it.vid, jumlah: l.it.qty })) };
     A.busy($("#place"), () => A.createOrder(body)).then(res => {
       if (!res) return;
@@ -333,11 +325,42 @@ function stepDone() {
 }
 
 /* ---------- Lacak pesanan ---------- */
+function orderResult(o) {
+  return `<div class="card" style="max-width:680px"><h2>${esc(o.kode)}</h2><p>Status: <span class="pill">${esc(o.status)}</span> Pembayaran: <span class="pill">${esc(o.status_bayar)}</span></p>
+    ${o.resi ? `<p>Nomor resi: <b>${esc(o.resi)}</b></p>` : ""}<p class="muted">Dibuat ${esc(o.dibuat)} - tujuan ${esc(o.kota)}</p>
+    <div class="tablewrap"><table><thead><tr><th>Produk</th><th>Jml</th><th>Subtotal</th><th>Ulasan</th></tr></thead><tbody>${o.items.map(i => `<tr><td>${esc(i.nama)}<br><span class="muted">${esc(i.warna)}, ${esc(i.ukuran)}</span></td><td>${i.jumlah}</td><td>${rp(i.subtotal)}</td><td>${o.bisa_ulasan ? (i.sudah_ulasan ? '<span class="pill">Sudah diulas</span>' : `<button class="btn sm ghost" data-rv="${esc(i.product_id)}" data-n="${esc(i.nama)}">Beri ulasan</button>`) : "-"}</td></tr>`).join("")}</tbody></table></div>
+    <div class="sum"><div><span>Ongkir (${esc(o.pengiriman)})</span><span>${o.ongkir ? rp(o.ongkir) : "Gratis"}</span></div><div class="tot"><span>Total</span><span>${rp(o.total)}</span></div></div>
+    ${o.bisa_ulasan ? "" : '<p class="muted">Tombol ulasan muncul setelah pesanan berstatus Selesai.</p>'}<div id="rvBox"></div></div>`;
+}
+// ctx = { kode, wa } untuk tamu, atau { kode } untuk pelanggan yang login
+function bindReviews(box, ctx) {
+  box.onclick = e => {
+    const b = e.target.closest("button[data-rv]"); if (!b) return;
+    $("#rvBox").innerHTML = `<div class="card" style="margin-top:14px;background:var(--cream)"><h3>Ulasan untuk ${esc(b.dataset.n)}</h3>
+      <div class="field" id="r-nama"><label for="rvName">Nama tampilan (boleh nama panggilan)</label><input id="rvName" maxlength="30" autocomplete="nickname" value="${esc(S.cust ? S.cust.nama.split(" ")[0] : "")}"><div class="err"></div></div>
+      <div class="field" id="r-rating"><label for="rvRating">Rating</label><select id="rvRating"><option value="">Pilih rating</option><option value="5">5 - Sangat bagus</option><option value="4">4 - Bagus</option><option value="3">3 - Cukup</option><option value="2">2 - Kurang</option><option value="1">1 - Buruk</option></select><div class="err"></div></div>
+      <div class="field" id="r-text"><label for="rvText">Ulasan (5-500 karakter)</label><textarea id="rvText" maxlength="500"></textarea><div class="err"></div></div>
+      <div id="rvMsg"></div><button class="btn" id="rvSend" data-loading="Mengirim...">Kirim Ulasan</button></div>`;
+    $("#rvName").focus();
+    $("#rvSend").onclick = () => {
+      const n = $("#rvName").value.trim(), r = $("#rvRating").value, t = $("#rvText").value.trim(); let bad = false;
+      const chk = (id, ok, msg) => { const f = $("#" + id); f.classList.toggle("bad", !ok); $(".err", f).textContent = ok ? "" : msg; if (!ok) bad = true; };
+      chk("r-nama", n.length >= 2, "Isi nama tampilan minimal 2 karakter."); chk("r-rating", !!r, "Pilih rating 1 sampai 5."); chk("r-text", t.length >= 5, "Tulis ulasan minimal 5 karakter.");
+      if (bad) return;
+      A.busy($("#rvSend"), () => A.submitReview({ kode: ctx.kode, whatsapp: ctx.wa || "", product_id: b.dataset.rv, nama: n, rating: Number(r), komentar: t })).then(res => {
+        if (!res) return;
+        $("#rvBox").innerHTML = notice(res.message, "ok");
+        const pill = document.createElement("span"); pill.className = "pill"; pill.textContent = "Sudah diulas"; b.replaceWith(pill);
+      }).catch(er => { $("#rvMsg").innerHTML = notice(er.message, "error"); });
+    };
+  };
+}
 function vTrack(prefill) {
   const recent = load(ORD_KEY, []);
-  show(`<section class="section"><h1>Lacak Pesanan</h1><div class="card" style="max-width:560px"><p class="muted">Masukkan nomor pesanan dan nomor WhatsApp yang kamu pakai saat checkout. Tidak perlu akun.</p>
+  show(`<section class="section"><h1>Lacak Pesanan</h1>${S.cust ? `<p class="notice">Kamu masuk sebagai ${esc(S.cust.nama)}. Semua pesanan akunmu ada di <a href="#/akun">Akun Saya</a>.</p>` : ""}
+    <div class="card" style="max-width:560px"><p class="muted">Masukkan nomor pesanan dan nomor WhatsApp yang kamu pakai saat checkout. Tidak perlu akun.</p>
     <div class="field" id="t-kode"><label for="tk">Nomor pesanan</label><input id="tk" maxlength="30" placeholder="Contoh: CS260101-AB3XY" value="${esc(prefill)}"><div class="err"></div></div>
-    <div class="field" id="t-wa"><label for="tw">Nomor WhatsApp</label><input id="tw" inputmode="tel" placeholder="081234567890"><div class="err"></div></div>
+    <div class="field" id="t-wa"><label for="tw">Nomor WhatsApp</label><input id="tw" inputmode="tel" placeholder="081234567890" value="${esc(S.cust ? S.cust.whatsapp : "")}"><div class="err"></div></div>
     ${recent.length ? `<p class="muted">Pesanan terakhir di perangkat ini: ${recent.map(r => `<button class="link" data-k="${esc(r.kode)}">${esc(r.kode)}</button>`).join(", ")}</p>` : ""}
     <div id="tMsg"></div><button class="btn" id="tgo" data-loading="Mencari pesanan...">Cek Status</button></div><div id="tRes" style="margin-top:20px"></div></section>`);
   $$("[data-k]").forEach(b => b.onclick = () => { $("#tk").value = b.dataset.k; $("#tw").focus(); });
@@ -349,41 +372,120 @@ function vTrack(prefill) {
     $("#tMsg").innerHTML = ""; $("#tRes").innerHTML = "";
     A.busy($("#tgo"), () => A.trackOrder(k, w)).then(o => {
       if (!o) return;
-      $("#tRes").innerHTML = `<div class="card" style="max-width:680px"><h2>${esc(o.kode)}</h2><p>Status: <span class="pill">${esc(o.status)}</span> Pembayaran: <span class="pill">${esc(o.status_bayar)}</span></p>
-        ${o.resi ? `<p>Nomor resi: <b>${esc(o.resi)}</b></p>` : ""}<p class="muted">Dibuat ${esc(o.dibuat)} - tujuan ${esc(o.kota)}</p>
-        <div class="tablewrap"><table><thead><tr><th>Produk</th><th>Jml</th><th>Subtotal</th></tr></thead><tbody>${o.items.map(i => `<tr><td>${esc(i.nama)}<br><span class="muted">${esc(i.warna)}, ${esc(i.ukuran)}</span></td><td>${i.jumlah}</td><td>${rp(i.subtotal)}</td></tr>`).join("")}</tbody></table></div>
-        <div class="sum"><div><span>Ongkir</span><span>${o.ongkir ? rp(o.ongkir) : "Gratis"}</span></div><div class="tot"><span>Total</span><span>${rp(o.total)}</span></div></div></div>`;
+      $("#tRes").innerHTML = orderResult(o); bindReviews($("#tRes"), { kode: k, wa: w });
     }).catch(e => { $("#tMsg").innerHTML = notice(e.message, "error"); });
   };
 }
 
-/* ---------- Halaman informasi ---------- */
-function vInfo(name) {
-  const st = S.settings, wa = st.whatsapp_toko;
-  const contact = `<ul><li>WhatsApp: ${wa ? "+" + esc(wa) : "belum diatur admin"}</li><li>Email: ${esc(st.email_toko || "belum diatur admin")}</li><li>Alamat: ${esc(st.alamat_toko || "-")}</li><li>Jam operasional: ${esc(st.jam_operasional || "-")}</li></ul>`;
-  const pages = {
-    tentang: ["Tentang Kami", `<p>${esc(st.nama_toko || "Cacutie Style")} adalah toko fashion online untuk anak muda dan mahasiswa, dengan pilihan untuk wanita, pria, dan aksesori. ${esc(st.slogan || "")}</p><p class="muted">Website ini dibuat untuk tugas mata kuliah E-Commerce. Produk dan ulasan yang tampil adalah data contoh kecuali sudah diganti admin.</p><h2>Kontak toko</h2>${contact}`],
-    faq: ["FAQ & Cara Belanja", `<details open><summary><b>Bagaimana cara berbelanja?</b></summary><p>Pilih produk, tentukan warna dan ukuran, lalu Tambah ke Keranjang. Buka keranjang, tekan Checkout, isi data pengiriman, periksa ringkasan, pilih metode pembayaran, lalu Buat Pesanan. Tidak perlu akun.</p></details>
-      <details><summary><b>Bagaimana cara melacak pesanan?</b></summary><p>Buka menu Lacak Pesanan, isi nomor pesanan dan nomor WhatsApp yang kamu pakai saat checkout.</p></details>
-      <details><summary><b>Bagaimana pembayarannya?</b></summary><p>Pembayaran masih manual: transfer bank sesuai instruksi setelah pesanan dibuat, atau diatur lewat WhatsApp. Belum ada pembayaran otomatis.</p></details>
-      <details><summary><b>Bagaimana ongkos kirimnya?</b></summary><p>${esc(st.info_pengiriman || "Ongkir memakai tarif flat toko.")}</p></details>
-      <details><summary><b>Ukuran yang kupilih habis, bagaimana?</b></summary><p>Pilih warna atau ukuran lain yang masih tersedia. Opsi yang habis tampil dicoret dan tidak bisa dipilih.</p></details>
-      <details><summary><b>Bagaimana jika ingin menukar barang?</b></summary><p>Lihat <a href="#/pengembalian">Kebijakan Pengembalian</a> atau hubungi kontak toko.</p></details><h2>Kontak</h2>${contact}`],
-    privasi: ["Kebijakan Privasi", `<p class="notice warn">Contoh kebijakan untuk tugas kuliah. Pemilik toko perlu menyesuaikannya sebelum dipakai untuk bisnis sungguhan.</p>
-      <h3>Data yang dikumpulkan</h3><p>Saat checkout: nama penerima, nomor WhatsApp, alamat, kota, catatan, dan isi pesanan. Untuk ulasan: nama tampilan, rating, dan komentar. Kami tidak meminta kata sandi, PIN, atau kode OTP.</p>
-      <h3>Tujuan penggunaan</h3><p>Memproses dan mengirim pesanan, menghubungi pembeli terkait pesanan, serta menampilkan status pesanan.</p>
-      <h3>Penyimpanan dan akses</h3><p>Data pesanan disimpan di Google Sheets milik pemilik toko dan hanya dapat dibuka oleh admin. Pelacakan pesanan memerlukan nomor pesanan dan nomor WhatsApp yang cocok. Keranjang disimpan di browsermu sendiri (localStorage) dan berisi varian serta jumlah saja.</p>
-      <h3>Kontak</h3>${contact}`],
-    pengembalian: ["Kebijakan Pengembalian", `<p class="notice warn">Contoh ketentuan untuk tugas kuliah, belum merupakan kebijakan bisnis resmi. Admin dapat menyesuaikannya.</p>
-      <ul><li>Penukaran ukuran atau barang cacat dapat diajukan dalam 3 hari setelah barang diterima.</li><li>Barang harus belum dipakai atau dicuci, dan label masih terpasang.</li><li>Sertakan foto atau video kondisi barang saat menghubungi toko lewat WhatsApp.</li><li>Biaya kirim penukaran karena kesalahan toko ditanggung toko. Penukaran karena alasan lain ditanggung pembeli.</li><li>Pesanan yang dibatalkan sebelum dikirim akan membuat stok kembali tersedia.</li></ul><h3>Kontak</h3>${contact}`]
+/* ---------- Akun pelanggan (opsional) ---------- */
+function updateAcct() {
+  const a = $("#navAcct");
+  a.textContent = S.cust ? "Akun Saya" : "Masuk / Daftar"; a.href = S.cust ? "#/akun" : "#/masuk"; a.dataset.r = S.cust ? "akun" : "masuk";
+  $("#gAcctSub").textContent = S.cust ? "Lanjut sebagai " + S.cust.nama : "Pesan lebih cepat dan lihat riwayat pesananmu";
+}
+function vAuth() {
+  if (S.cust) { location.hash = "#/akun"; return; }
+  const forms = {
+    in: `<div class="field" id="a-email"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email"><div class="err"></div></div>
+      <div class="field" id="a-pw"><label for="aPw">Kata sandi</label><input id="aPw" type="password" autocomplete="current-password"><div class="err"></div></div>
+      <div id="aMsg"></div><button class="btn" id="aGo" data-loading="Memeriksa...">Masuk</button>`,
+    up: `<div class="field" id="a-nama"><label for="aNama">Nama lengkap</label><input id="aNama" maxlength="60" autocomplete="name"><div class="err"></div></div>
+      <div class="field" id="a-wa"><label for="aWa">Nomor WhatsApp</label><input id="aWa" inputmode="tel" placeholder="081234567890" autocomplete="tel"><div class="err"></div></div>
+      <div class="field" id="a-email"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email"><div class="err"></div></div>
+      <div class="field" id="a-pw"><label for="aPw">Kata sandi (8-64 karakter)</label><input id="aPw" type="password" autocomplete="new-password"><div class="err"></div></div>
+      <div class="field" id="a-pw2"><label for="aPw2">Ulangi kata sandi</label><input id="aPw2" type="password" autocomplete="new-password"><div class="err"></div></div>
+      <div id="aMsg"></div><button class="btn" id="aGo" data-loading="Membuat akun...">Buat Akun</button>`
   };
-  show(`<section class="section"><div class="card" style="max-width:760px"><h1>${pages[name][0]}</h1>${pages[name][1]}</div></section>`);
+  let tab = "in";
+  show(`<section class="section"><div class="card" style="max-width:480px;margin:0 auto"><h1 style="font-size:1.6rem">Akun pelanggan</h1>
+    <p class="muted">Akun bersifat opsional. Kamu tetap bisa belanja sebagai tamu tanpa daftar.</p>
+    <div class="admin-tabs" role="tablist"><button role="tab" data-t="in">Masuk</button><button role="tab" data-t="up">Buat akun</button></div>
+    <div id="authBox"></div><p style="margin:16px 0 0"><a href="#/">Lanjut sebagai tamu</a></p></div></section>`);
+  let bad = false;
+  const chk = (id, ok, m) => { const el = $("#" + id); el.classList.toggle("bad", !ok); $(".err", el).textContent = ok ? "" : m; if (!ok) bad = true; };
+  const done = r => { if (!r) return; S.cust = r.profil; updateAcct(); toast("Berhasil masuk. Halo, " + r.profil.nama + "!", "ok"); location.hash = "#/"; };
+  const isMail = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+  function login() {
+    bad = false; const e = $("#aEmail").value.trim(), p = $("#aPw").value;
+    chk("a-email", isMail(e), "Isi email dengan benar."); chk("a-pw", !!p, "Isi kata sandi.");
+    if (bad) return;
+    A.busy($("#aGo"), () => A.cust.login(e, p)).then(done).catch(er => { $("#aMsg").innerHTML = notice(er.message, "error"); });
+  }
+  function register() {
+    bad = false; const n = $("#aNama").value.trim(), w = $("#aWa").value.trim(), e = $("#aEmail").value.trim(), p = $("#aPw").value, p2 = $("#aPw2").value;
+    chk("a-nama", n.length >= 2, "Isi nama minimal 2 karakter."); chk("a-wa", !!normWa(w), "Nomor WhatsApp belum benar. Contoh: 081234567890.");
+    chk("a-email", isMail(e), "Isi email dengan benar."); chk("a-pw", p.length >= 8 && p.length <= 64, "Kata sandi harus 8 sampai 64 karakter."); chk("a-pw2", p === p2, "Kata sandi tidak sama.");
+    if (bad) return;
+    A.busy($("#aGo"), () => A.cust.register({ nama: n, whatsapp: w, email: e, password: p })).then(done).catch(er => { $("#aMsg").innerHTML = notice(er.message, "error"); });
+  }
+  function paint() {
+    $$("[data-t]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === tab));
+    $("#authBox").innerHTML = forms[tab]; $("#aGo").onclick = tab === "in" ? login : register;
+    $$("#authBox input").forEach(i => { i.onkeydown = ev => { if (ev.key === "Enter") $("#aGo").click(); }; });
+  }
+  $$("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
+  paint();
+}
+function vAccount() {
+  if (!S.cust) { location.hash = "#/masuk"; return; }
+  show(`<section class="section"><h1>Akun Saya</h1><div class="card" style="max-width:680px;margin-bottom:18px"><p style="margin:0"><b>${esc(S.cust.nama)}</b><br>${esc(S.cust.email)}<br>WhatsApp: +${esc(S.cust.whatsapp)}</p>
+    <button class="btn sm ghost" id="out" style="margin-top:12px">Keluar dari akun</button></div>
+    <h2>Pesanan saya</h2><div id="mine"><div class="loading"><div class="spin"></div>Memuat pesanan...</div></div><div id="mineRes" style="margin-top:16px"></div></section>`);
+  $("#out").onclick = () => A.cust.logout().then(() => { S.cust = null; updateAcct(); toast("Kamu sudah keluar.", "ok"); location.hash = "#/"; });
+  A.cust.orders().then(list => {
+    $("#mine").innerHTML = list.length ? `<div class="card tablewrap" style="max-width:680px"><table><thead><tr><th>Nomor</th><th>Tanggal</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>${list.map(o => `<tr><td>${esc(o.kode)}</td><td>${esc(o.dibuat)}</td><td>${rp(o.total)}</td><td><span class="pill">${esc(o.status)}</span></td><td><button class="btn sm ghost" data-k="${esc(o.kode)}">Detail</button></td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="card" style="max-width:680px"><p class="muted" style="margin:0">Belum ada pesanan di akun ini. Pesanan yang dibuat saat kamu masuk akan muncul di sini.</p></div>`;
+  }).catch(e => { if (e.code === "UNAUTHORIZED") { S.cust = null; updateAcct(); location.hash = "#/masuk"; } else $("#mine").innerHTML = notice(e.message, "error"); });
+  $("#mine").onclick = ev => {
+    const b = ev.target.closest("button[data-k]"); if (!b) return;
+    A.busy(b, () => A.trackOrder(b.dataset.k, "")).then(o => {
+      if (!o) return; $("#mineRes").innerHTML = orderResult(o); bindReviews($("#mineRes"), { kode: o.kode }); $("#mineRes").scrollIntoView({ behavior: "smooth" });
+    }).catch(er => toast(er.message, "error"));
+  };
+}
+
+/* ---------- Halaman informasi ---------- */
+function vInfo() {
+  const st = S.settings, wa = st.whatsapp_toko;
+  const contact = [wa ? "WhatsApp: +" + esc(wa) : "", st.email_toko ? "Email: " + esc(st.email_toko) : "", st.jam_operasional ? "Jam operasional: " + esc(st.jam_operasional) : ""].filter(Boolean);
+  show(`<section class="section"><div class="card" style="max-width:760px"><h1>Bantuan</h1>
+    <details open><summary><b>Bagaimana cara berbelanja?</b></summary><p>Pilih produk, tentukan warna dan ukuran, lalu Tambah ke Keranjang. Buka keranjang, tekan Checkout, isi data pengiriman, pilih jasa kirim, periksa ringkasan, pilih metode pembayaran, lalu Buat Pesanan. Akun tidak wajib.</p></details>
+    <details><summary><b>Bagaimana ongkir dihitung?</b></summary><p>Setiap jasa kirim punya tarif sendiri. Pilih jasa kirim saat checkout dan ongkir langsung tampil di ringkasan.</p></details>
+    <details><summary><b>Bagaimana cara membayar?</b></summary><p>Pembayaran dilakukan manual: transfer bank sesuai instruksi setelah pesanan dibuat, atau diatur lewat WhatsApp dengan admin.</p></details>
+    <details><summary><b>Bagaimana cara melacak pesanan?</b></summary><p>Buka Lacak Pesanan lalu isi nomor pesanan dan nomor WhatsApp saat checkout. Kalau punya akun, semua pesananmu ada di Akun Saya.</p></details>
+    <details><summary><b>Bagaimana cara memberi ulasan?</b></summary><p>Setelah pesanan berstatus Selesai, buka detail pesananmu di Lacak Pesanan atau Akun Saya, lalu tekan Beri ulasan pada produk yang kamu beli.</p></details>
+    <details><summary><b>Ukuran yang kupilih habis, bagaimana?</b></summary><p>Pilih warna atau ukuran lain yang masih tersedia. Opsi yang habis tampil dicoret dan tidak bisa dipilih.</p></details>
+    ${contact.length ? `<h2>Hubungi kami</h2><ul>${contact.map(c => `<li>${c}</li>`).join("")}</ul>` : ""}</div></section>`);
 }
 
 /* ---------- Header: menu mobile & pencarian ---------- */
 $("#btnMenu").onclick = () => { const o = $("#nav").classList.toggle("open"); $("#btnMenu").setAttribute("aria-expanded", o); };
 $("#btnSearch").onclick = () => { const o = $("#searchbar").classList.toggle("open"); $("#btnSearch").setAttribute("aria-expanded", o); if (o) $("#q").focus(); };
 $("#searchForm").onsubmit = e => { e.preventDefault(); const q = $("#q").value.trim(); location.hash = "#/produk" + (q ? "?q=" + encodeURIComponent(q) : ""); $("#searchbar").classList.remove("open"); };
+
+/* ---------- Mode: gerbang pilihan, toko, admin (satu tautan) ---------- */
+const MODE_KEY = "cs_mode";
+function setMode(m) {
+  $("#gate").hidden = m !== "gate"; $("#shop").hidden = m !== "shop"; $("#admin").hidden = m !== "admin";
+  try { sessionStorage.setItem(MODE_KEY, m); } catch (e) {}
+  window.scrollTo(0, 0);
+  if (m === "shop") route(); else if (m === "admin") window.CSAdmin.start();
+}
+$("#gGuest").onclick = () => { if (location.hash === "" || location.hash === "#") location.hash = "#/"; setMode("shop"); };
+$("#gAcct").onclick = () => { location.hash = S.cust ? "#/akun" : "#/masuk"; setMode("shop"); };
+$("#gAdmin").onclick = () => setMode("admin");
+$("#navGate").onclick = e => { e.preventDefault(); setMode("gate"); };
+$("#admShop").onclick = () => { location.hash = "#/"; setMode("shop"); };
+$("#admGate").onclick = () => setMode("gate");
+$("#skip").onclick = () => { (!$("#shop").hidden ? $("#app") : !$("#admin").hidden ? $("#adm") : $("#gGuest")).focus(); };
 window.addEventListener("hashchange", route);
-route();
+
+let startMode = "gate";
+try { startMode = sessionStorage.getItem(MODE_KEY) || "gate"; } catch (e) {}
+if (["gate", "shop", "admin"].indexOf(startMode) < 0) startMode = "gate";
+updateAcct(); updateBadge();
+setMode(startMode);
+if (A.cust.has()) { // pulihkan sesi akun tanpa menghambat tampilan awal
+  A.cust.session().then(r => { S.cust = r.profil; updateAcct(); if (!$("#shop").hidden) route(); }).catch(() => {});
+}
 })();

@@ -1,4 +1,4 @@
-/* Cacutie Style - style.css (dipakai index.html dan admin.html) */
+/* Cacutie Style - style.css (dipakai index.html) */
 :root{
   --cocoa:#4A3028; --mocha:#8B654F; --latte:#C6A98D; --beige:#E8D8C5; --cream:#F7F1E8; --white:#FFFFFF;
   --ok:#3E6B48; --warn:#9A5B13; --err:#9B2C2C;
@@ -140,3 +140,27 @@ dialog{border:0;border-radius:var(--r);padding:20px;max-width:min(680px,94vw);wi
 dialog::backdrop{background:rgba(74,48,40,.45)}
 .vrow{display:grid;grid-template-columns:1fr 1fr 80px auto auto;gap:6px;margin-bottom:8px;align-items:center}
 @media(max-width:560px){.vrow{grid-template-columns:1fr 1fr;} }
+
+/* ===== Revisi: gerbang, logo, iklan ===== */
+[hidden]{display:none!important}
+.skip{border:0;font:inherit;cursor:pointer}
+.logo{flex-direction:row;align-items:center;gap:10px}
+.logo img{width:40px;height:40px;flex:none}
+.logo .lt{display:flex;flex-direction:column;line-height:1}
+.gate{min-height:100vh;display:grid;place-items:center;padding:28px 18px;background:radial-gradient(circle at 50% 0,var(--beige),var(--cream) 60%)}
+.gate .box{width:100%;max-width:900px;text-align:center}
+.gate h1{margin:10px 0 2px}
+.gopts{display:grid;gap:16px;margin-top:28px}
+@media(min-width:760px){.gopts{grid-template-columns:repeat(3,1fr)}}
+.gopt{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;min-height:130px;padding:22px 16px;background:var(--white);border:2px solid var(--beige);border-radius:var(--r);box-shadow:var(--shadow);color:var(--cocoa);font:inherit;cursor:pointer;transition:border-color .2s,transform .2s}
+.gopt:hover{border-color:var(--mocha);transform:translateY(-2px)}
+.gopt b{font:600 1.15rem var(--serif)} .gopt span{font-size:.9rem;color:#6d5449}
+.hero .art{background:var(--white);border-radius:50%;padding:0}
+.hero .art img{width:72%;height:auto}
+.ads{display:grid;gap:16px} @media(min-width:760px){.ads{grid-template-columns:repeat(2,1fr)}}
+.ad{display:flex;background:var(--white);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.adimg{flex:0 0 38%;background:var(--beige)} .adimg img{width:100%;height:100%;object-fit:cover}
+.adtxt{padding:16px;display:flex;flex-direction:column;gap:6px;justify-content:center;align-items:flex-start}
+.adtxt h3,.adtxt p{margin:0}
+.crow{display:grid;grid-template-columns:2fr 1fr 1.2fr auto auto;gap:6px;margin-bottom:8px;align-items:center}
+@media(max-width:640px){.crow{grid-template-columns:1fr 1fr}}

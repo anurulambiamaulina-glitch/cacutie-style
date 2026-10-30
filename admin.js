@@ -38,7 +38,7 @@ $("#logout").onclick = () => { ADM.logout().catch(() => {}).then(() => showLogin
 /* ---------- Kerangka ---------- */
 function showApp() {
   $("#logout").hidden = false;
-  const tabs = [["ringkasan", "Ringkasan"], ["produk", "Produk"], ["pesanan", "Pesanan"], ["ulasan", "Ulasan"], ["pengaturan", "Pengaturan toko"]];
+  const tabs = [["ringkasan", "Ringkasan"], ["produk", "Produk"], ["pesanan", "Pesanan"], ["ulasan", "Ulasan"], ["kurir", "Jasa kirim"], ["iklan", "Iklan"], ["pengaturan", "Pengaturan toko"]];
   root.innerHTML = `<div class="admin-tabs" role="tablist" aria-label="Menu admin">${tabs.map(t => `<button role="tab" data-t="${t[0]}" aria-selected="${tab === t[0]}">${t[1]}</button>`).join("")}</div><div id="pane"></div>`;
   $(".admin-tabs").onclick = e => { const b = e.target.closest("button"); if (!b) return; tab = b.dataset.t; $$tabs(); render(); };
   render();
@@ -46,7 +46,7 @@ function showApp() {
 function $$tabs() { document.querySelectorAll(".admin-tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.t === tab)); }
 function render() {
   const pane = $("#pane"); pane.innerHTML = '<div class="loading"><div class="spin"></div>Memuat...</div>';
-  ({ ringkasan: vSummary, produk: vProducts, pesanan: vOrders, ulasan: vReviews, pengaturan: vSettings })[tab](pane)
+  ({ ringkasan: vSummary, produk: vProducts, pesanan: vOrders, ulasan: vReviews, kurir: vCouriers, iklan: vAds, pengaturan: vSettings })[tab](pane)
     .catch(e => { if (e.code !== "UNAUTHORIZED") pane.innerHTML = notice(e.message, "error"); });
 }
 function modal(html) { dlg.innerHTML = html; if (!dlg.open) dlg.showModal(); }
@@ -97,7 +97,7 @@ function editProduct(p) {
     <div class="field"><label for="pKat">Kategori</label><select id="pKat">${opts(KAT, x.kategori)}</select></div>
     <div class="field"><label for="pHarga">Harga (Rp)</label><input id="pHarga" type="number" min="1000" value="${esc(x.harga)}"></div>
     <div class="field"><label for="pLabel">Label</label><select id="pLabel">${opts(LABEL, x.label)}</select></div>
-    <div class="field"><label for="pImg">Tautan gambar (https, boleh kosong)</label><input id="pImg" value="${esc(x.gambar)}" placeholder="https://..."></div></div>
+    <div class="field"><label for="pImg">Tautan gambar (https atau tautan Google Drive, boleh kosong)</label><input id="pImg" value="${esc(x.gambar)}" placeholder="https://..."></div></div>
     <div class="field"><label for="pDesc">Deskripsi</label><textarea id="pDesc" maxlength="600">${esc(x.deskripsi)}</textarea></div>
     <label class="chk"><input type="checkbox" id="pShow" ${x.tampil ? "checked" : ""}> Tampilkan di toko</label>
     <h3>Varian dan stok</h3><p class="muted">Isi minimal satu varian aktif. Varian yang dihapus hanya dinonaktifkan agar riwayat pesanan tetap utuh.</p>
@@ -151,7 +151,7 @@ function orderDetail(id) {
 /* ---------- Ulasan ---------- */
 function vReviews(pane) {
   return call("adminListReviews").then(list => {
-    pane.innerHTML = `<h2>Ulasan</h2>${list.length ? list.map(r => `<div class="card" style="margin-bottom:10px"><b>${esc(r.nama)}</b> untuk ${esc(r.produk)} - ${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)} <span class="pill">${esc(r.status)}</span>
+    pane.innerHTML = `<h2>Ulasan</h2>${list.length ? list.map(r => `<div class="card" style="margin-bottom:10px"><b>${esc(r.nama)}</b> untuk ${esc(r.produk)} - ${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)} <span class="pill">${esc(r.status)}</span>${r.terverifikasi ? ' <span class="pill">Pembeli terverifikasi</span>' : ""}
       <p style="margin:6px 0">${esc(r.komentar)}</p><span class="muted">${esc(r.dibuat)}</span><div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" data-r="${esc(r.review_id)}" data-s="Disetujui">Setujui</button><button class="btn sm ghost" data-r="${esc(r.review_id)}" data-s="Ditolak">Tolak</button></div></div>`).join("") : "<div class='card'><p class='muted'>Belum ada ulasan.</p></div>"}`;
     pane.onclick = e => { const b = e.target.closest("button[data-r]"); if (!b) return;
       if (!confirm((b.dataset.s === "Disetujui" ? "Setujui" : "Tolak") + " ulasan ini?")) return;
@@ -162,9 +162,9 @@ function vReviews(pane) {
 /* ---------- Pengaturan toko ---------- */
 function vSettings(pane) {
   const F = [["nama_toko", "Nama toko"], ["slogan", "Slogan"], ["whatsapp_toko", "Nomor WhatsApp toko (contoh 081234567890)"], ["email_toko", "Email toko"], ["alamat_toko", "Alamat toko"], ["jam_operasional", "Jam operasional"],
-    ["info_pengiriman", "Informasi pengiriman"], ["ongkir_flat", "Ongkir flat (Rp)"], ["gratis_ongkir_min", "Gratis ongkir mulai belanja (Rp, 0 = tidak ada)"], ["info_transfer", "Info pembayaran manual (rekening, atas nama)"]];
+    ["info_pengiriman", "Informasi pengiriman"], ["info_transfer", "Info pembayaran manual (rekening, atas nama)"]];
   return call("adminGetSettings").then(s => {
-    pane.innerHTML = `<div class="card" style="max-width:680px"><h2>Pengaturan toko</h2><p class="muted">Ongkir memakai tarif flat buatan admin, bukan tarif kurir real-time.</p>
+    pane.innerHTML = `<div class="card" style="max-width:680px"><h2>Pengaturan toko</h2><p class="muted">Tarif ongkir per jasa kirim diatur di tab Jasa kirim.</p>
       ${F.map(f => `<div class="field"><label for="s_${f[0]}">${f[1]}</label><input id="s_${f[0]}" value="${esc(s[f[0]] || "")}" maxlength="400"></div>`).join("")}
       <div id="sMsg"></div><button class="btn" id="sSave" data-loading="Menyimpan...">Simpan pengaturan</button></div>`;
     $("#sSave").onclick = () => {
@@ -175,6 +175,52 @@ function vSettings(pane) {
   });
 }
 
-/* ---------- Mulai ---------- */
-if (ADM.has()) { loading(); call("adminSession").then(showApp).catch(() => {}); } else showLogin();
+/* ---------- Jasa kirim ---------- */
+function crow(k) {
+  k = k || { kurir_id: "", nama: "", tarif: 0, estimasi: "", aktif: true };
+  return `<div class="crow" data-id="${esc(k.kurir_id)}"><input aria-label="Nama jasa kirim" placeholder="Nama (JNE, J&T, ...)" maxlength="30" value="${esc(k.nama)}"><input aria-label="Tarif ongkir (Rp)" type="number" min="0" placeholder="Tarif (Rp)" value="${k.tarif}"><input aria-label="Estimasi tiba" placeholder="Estimasi (opsional)" maxlength="30" value="${esc(k.estimasi)}"><label class="chk" style="margin:0"><input type="checkbox" ${k.aktif ? "checked" : ""}> Aktif</label><button type="button" class="btn sm ghost" data-rm>Hapus</button></div>`;
+}
+function vCouriers(pane) {
+  return call("adminListCouriers").then(list => {
+    pane.innerHTML = `<div class="card" style="max-width:860px"><h2>Jasa kirim dan ongkir</h2><p class="muted">Setiap jasa kirim punya tarif sendiri yang kamu tetapkan. Tarif ini bukan hasil hitung real-time dari kurir. Pelanggan memilih jasa kirim saat checkout dan hanya jasa kirim yang aktif yang tampil.</p>
+      <div id="clist">${list.map(crow).join("")}</div><button type="button" class="btn sm ghost" id="addC">Tambah jasa kirim</button>
+      <div id="cMsg" style="margin:12px 0"></div><button class="btn" id="cSave" data-loading="Menyimpan...">Simpan jasa kirim</button></div>`;
+    $("#addC").onclick = () => $("#clist").insertAdjacentHTML("beforeend", crow());
+    $("#clist").onclick = e => { if (e.target.dataset.rm !== undefined) e.target.closest(".crow").remove(); };
+    $("#cSave").onclick = () => {
+      const l = [...document.querySelectorAll("#clist .crow")].map(r => { const i = r.querySelectorAll("input"); return { kurir_id: r.dataset.id, nama: i[0].value.trim(), tarif: Number(i[1].value), estimasi: i[2].value.trim(), aktif: i[3].checked }; });
+      API.busy($("#cSave"), () => call("adminSaveCouriers", { list: l })).then(r => { if (r) { $("#cMsg").innerHTML = notice("Jasa kirim tersimpan.", "ok"); toast("Jasa kirim tersimpan.", "ok"); } })
+        .catch(e => { $("#cMsg").innerHTML = notice(e.message, "error"); });
+    };
+  });
+}
+
+/* ---------- Iklan ---------- */
+function arow(a) {
+  a = a || { ad_id: "", judul: "", teks: "", gambar: "", tautan: "#/produk", tombol: "Lihat Produk", aktif: true };
+  return `<div class="card arow" data-id="${esc(a.ad_id)}" style="margin-bottom:12px"><div class="row two">
+    <div class="field"><label>Judul iklan</label><input maxlength="60" value="${esc(a.judul)}"></div>
+    <div class="field"><label>Teks tombol (boleh kosong)</label><input maxlength="20" value="${esc(a.tombol)}"></div>
+    <div class="field"><label>Teks singkat</label><input maxlength="140" value="${esc(a.teks)}"></div>
+    <div class="field"><label>Tautan (#/produk, #/produk/P02, atau https://...)</label><input maxlength="300" value="${esc(a.tautan)}"></div></div>
+    <div class="field"><label>Gambar (https, tautan Google Drive, atau assets/...; boleh kosong)</label><input maxlength="500" value="${esc(a.gambar)}"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center"><label class="chk" style="margin:0"><input type="checkbox" ${a.aktif ? "checked" : ""}> Tampilkan di beranda</label><button type="button" class="btn sm ghost" data-rm>Hapus iklan</button></div></div>`;
+}
+function vAds(pane) {
+  return call("adminListAds").then(list => {
+    pane.innerHTML = `<div style="max-width:860px"><h2>Iklan di beranda</h2><p class="muted">Banner iklan tampil di beranda toko dengan label "Iklan". Maksimal 6.</p>
+      <div id="alist">${list.map(arow).join("")}</div><button type="button" class="btn sm ghost" id="addA">Tambah iklan</button>
+      <div id="aMsg" style="margin:12px 0"></div><button class="btn" id="aSave" data-loading="Menyimpan...">Simpan iklan</button></div>`;
+    $("#addA").onclick = () => { if (document.querySelectorAll("#alist .arow").length >= 6) return toast("Maksimal 6 iklan.", "error"); $("#alist").insertAdjacentHTML("beforeend", arow()); };
+    $("#alist").onclick = e => { if (e.target.dataset.rm !== undefined && confirm("Hapus iklan ini? Perubahan baru tersimpan setelah menekan Simpan iklan.")) e.target.closest(".arow").remove(); };
+    $("#aSave").onclick = () => {
+      const l = [...document.querySelectorAll("#alist .arow")].map(r => { const i = r.querySelectorAll("input"); return { ad_id: r.dataset.id, judul: i[0].value.trim(), tombol: i[1].value.trim(), teks: i[2].value.trim(), tautan: i[3].value.trim(), gambar: i[4].value.trim(), aktif: i[5].checked }; });
+      API.busy($("#aSave"), () => call("adminSaveAds", { list: l })).then(r => { if (r) { $("#aMsg").innerHTML = notice("Iklan tersimpan.", "ok"); toast("Iklan tersimpan.", "ok"); } })
+        .catch(e => { $("#aMsg").innerHTML = notice(e.message, "error"); });
+    };
+  });
+}
+
+/* ---------- Mulai (dipanggil app.js saat mode admin dipilih) ---------- */
+window.CSAdmin = { start() { if (ADM.has()) { loading(); call("adminSession").then(showApp).catch(() => {}); } else showLogin(); } };
 })();

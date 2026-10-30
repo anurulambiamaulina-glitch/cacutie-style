@@ -75,6 +75,16 @@
   function tok() { try { return w.sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
   function setTok(v) { try { v ? w.sessionStorage.setItem(TOKEN_KEY, v) : w.sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} }
 
+  // Token akun pelanggan (opsional), disimpan di localStorage perangkat ini
+  var CUST_KEY = "cs_cust_token";
+  function ctok() { try { return w.localStorage.getItem(CUST_KEY); } catch (e) { return null; } }
+  function setCtok(v) { try { v ? w.localStorage.setItem(CUST_KEY, v) : w.localStorage.removeItem(CUST_KEY); } catch (e) {} }
+  function custCall(action, data) {
+    var t = ctok();
+    if (!t) return Promise.reject(new ApiError("UNAUTHORIZED", "Silakan masuk ke akunmu dulu."));
+    return post(action, data, t).catch(function (e) { if (e.code === "UNAUTHORIZED") setCtok(null); throw e; });
+  }
+
   // Cegah klik ganda: tombol dikunci sampai proses selesai
   function busy(btn, fn) {
     if (!btn) return Promise.resolve().then(fn);
@@ -88,12 +98,21 @@
 
   w.CSApi = {
     ApiError: ApiError, newKey: rid, busy: busy,
+    bootstrap: function () { return get("bootstrap"); },
     products: function () { return get("products"); },
     settings: function () { return get("settings"); },
     reviews: function (pid) { return get("reviews", { product_id: pid }); },
-    createOrder: function (o) { return post("createOrder", o); },
-    trackOrder: function (kode, whatsapp) { return post("trackOrder", { kode: kode, whatsapp: whatsapp }); },
-    submitReview: function (r) { return post("submitReview", r); },
+    createOrder: function (o) { return post("createOrder", o, ctok()); },
+    trackOrder: function (kode, whatsapp) { return post("trackOrder", { kode: kode, whatsapp: whatsapp || "" }, ctok()); },
+    submitReview: function (r) { return post("submitReview", r, ctok()); },
+    cust: {
+      has: function () { return !!ctok(); },
+      register: function (d) { return post("custRegister", d).then(function (r) { setCtok(r.token); return r; }); },
+      login: function (email, password) { return post("custLogin", { email: email, password: password }).then(function (r) { setCtok(r.token); return r; }); },
+      logout: function () { var t = ctok(); setCtok(null); return t ? post("custLogout", {}, t).catch(function () {}) : Promise.resolve(); },
+      session: function () { return custCall("custSession", {}); },
+      orders: function () { return custCall("custOrders", {}); }
+    },
     admin: {
       has: function () { return !!tok(); },
       login: function (key) { return post("adminLogin", { key: key }).then(function (r) { setTok(r.token); return r; }); },
