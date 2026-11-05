@@ -12,81 +12,93 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<button class="skip" id="skip" type="button">Lewati ke konten</button>
+<button class="skip" id="skip" type="button" data-i18n="skip">Lewati ke konten</button>
 
 <!-- 1) GERBANG: tiga pilihan saat tautan dibuka -->
 <section id="gate" class="gate" hidden aria-labelledby="gTitle">
+  <div class="lang gatelang" role="group" aria-label="Language / Bahasa"><button type="button" data-l="id">ID</button><button type="button" data-l="en">EN</button></div>
   <div class="box">
     <img src="assets/logo.svg" width="96" height="96" alt="Logo Cacutie Style">
     <h1 id="gTitle">Cacutie Style</h1>
-    <p class="muted" style="font-size:1.05rem">Your Style, Your Story.</p>
+    <p class="muted" style="font-size:1.05rem;margin-bottom:4px">Your Style, Your Story.</p>
+    <p class="muted" data-i18n="gate.prompt">Pilih cara kamu masuk</p>
     <div class="gopts">
-      <button class="gopt" id="gGuest" type="button"><b>Masuk sebagai Tamu</b><span>Langsung belanja tanpa akun</span></button>
-      <button class="gopt" id="gAcct" type="button"><b>Login / Buat Akun</b><span id="gAcctSub">Pesan lebih cepat dan lihat riwayat pesananmu</span></button>
-      <button class="gopt" id="gAdmin" type="button"><b>Login Admin</b><span>Kelola produk, pesanan, dan toko</span></button>
+      <button class="gopt" id="gGuest" type="button"><b data-i18n="gate.guest">Masuk sebagai Tamu</b><span data-i18n="gate.guest.d">Langsung belanja tanpa akun</span></button>
+      <button class="gopt" id="gAcct" type="button"><b data-i18n="gate.acct">Login / Buat Akun</b><span id="gAcctSub"></span></button>
+      <button class="gopt" id="gAdmin" type="button"><b data-i18n="gate.admin">Login Admin</b><span data-i18n="gate.admin.d">Kelola produk, pesanan, dan toko</span></button>
     </div>
   </div>
 </section>
 
 <!-- 2) TOKO PELANGGAN -->
 <div id="shop" hidden>
+<div class="annc" id="annc" hidden></div>
 <header class="top">
   <div class="wrap">
     <div class="bar">
-      <a class="logo" href="#/" aria-label="Cacutie Style, ke beranda"><img src="assets/logo.svg" alt=""><span class="lt">Cacutie Style<small>Your Style, Your Story.</small></span></a>
-      <nav class="main" id="nav" aria-label="Menu utama">
-        <a href="#/" data-r="home">Beranda</a>
-        <a href="#/produk" data-r="produk">Semua Produk</a>
-        <a href="#/produk?kat=Wanita">Wanita</a>
-        <a href="#/produk?kat=Pria">Pria</a>
-        <a href="#/produk?kat=Aksesori">Aksesori</a>
-        <a href="#/lacak" data-r="lacak">Lacak Pesanan</a>
-        <a href="#/faq" data-r="faq">Bantuan</a>
-        <a href="#/masuk" id="navAcct" data-r="masuk">Masuk / Daftar</a>
-        <a href="#" id="navGate">Ganti mode</a>
-      </nav>
+      <button class="icon-btn burger" id="btnMenu" type="button" data-i18n-aria="nav.open" aria-expanded="false" aria-controls="nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="logo" href="#/" data-i18n-aria="nav.home.aria"><img src="assets/logo.svg" alt=""><span class="lt">Cacutie Style<small>Your Style, Your Story.</small></span></a>
+      <form class="hsearch" id="searchForm" role="search">
+        <label class="sr" for="q" data-i18n="search.label">Cari produk</label>
+        <input id="q" type="search" data-i18n-ph="search.ph" autocomplete="off">
+        <button class="sbtn" type="submit" data-i18n-aria="search.btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+      </form>
       <div class="actions">
-        <button class="icon-btn" id="btnSearch" aria-label="Cari produk" aria-expanded="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <div class="lang" role="group" aria-label="Language / Bahasa"><button type="button" data-l="id">ID</button><button type="button" data-l="en">EN</button></div>
+        <button class="icon-btn" id="btnProfile" type="button" data-i18n-aria="p.open">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
         </button>
-        <a class="icon-btn" href="#/keranjang" aria-label="Keranjang belanja">
+        <a class="icon-btn" href="#/keranjang" data-i18n-aria="cart.aria">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8a3 3 0 016 0"/></svg>
           <span class="badge" id="cartCount" hidden>0</span>
         </a>
-        <button class="icon-btn burger" id="btnMenu" aria-label="Buka menu" aria-expanded="false" aria-controls="nav">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-        </button>
       </div>
     </div>
-    <div class="searchbar" id="searchbar">
-      <form id="searchForm" role="search">
-        <label class="sr" for="q">Cari produk</label>
-        <input id="q" type="search" placeholder="Cari nama produk atau SKU" autocomplete="off">
-        <button class="btn" type="submit">Cari</button>
-      </form>
-    </div>
+    <nav class="main" id="nav" data-i18n-aria="nav.aria">
+      <div class="navhead"><b data-i18n="nav.menu">Menu</b></div>
+      <a href="#/" data-key="home" data-i18n="nav.home">Beranda</a>
+      <a href="#/produk" data-key="produk" data-i18n="nav.all">Semua Produk</a>
+      <a href="#/produk?kat=Wanita" data-key="kat:Wanita" data-i18n="nav.women">Wanita</a>
+      <a href="#/produk?kat=Pria" data-key="kat:Pria" data-i18n="nav.men">Pria</a>
+      <a href="#/produk?kat=Aksesori" data-key="kat:Aksesori" data-i18n="nav.acc">Aksesori</a>
+      <a href="#/lacak" data-key="lacak" data-i18n="nav.track">Lacak Pesanan</a>
+      <a href="#/faq" data-key="faq" data-i18n="nav.help">Bantuan</a>
+    </nav>
   </div>
 </header>
 <main id="app" class="wrap" tabindex="-1"></main>
+<footer id="footer"></footer>
+<a id="waFab" class="fab" href="#" data-i18n-aria="wa.fab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 01-11.9 7L4 20l1.1-4A8 8 0 1120 12z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-.8.7a4 4 0 01-1.9-1.9l.7-.8-1-2L9 9.5z"/></svg><span data-i18n="wa.fab.label">Hubungi Admin</span></a>
 </div>
 
 <!-- 3) PANEL ADMIN (tautan yang sama) -->
 <div id="admin" hidden>
 <header class="top"><div class="wrap"><div class="bar">
   <span class="logo"><img src="assets/logo.svg" alt=""><span class="lt">Cacutie Style<small>Panel admin</small></span></span>
-  <nav class="main" style="margin-left:auto;display:flex;position:static;padding:0;border:0;background:none;flex-direction:row">
+  <div class="actions" style="margin-left:auto;gap:8px">
     <button class="btn sm ghost" id="admShop" type="button">Lihat toko</button>
     <button class="btn sm ghost" id="admGate" type="button">Ganti mode</button>
     <button class="btn sm" id="logout" type="button" hidden>Keluar</button>
-  </nav>
+    <button class="icon-btn" id="admProfile" type="button" aria-label="Profil admin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button>
+  </div>
 </div></div></header>
 <main class="wrap" id="adm" tabindex="-1" style="min-height:60vh"></main>
 </div>
+
+<!-- Panel profil (kanan) dan latar gelap, dipakai toko dan admin -->
+<div class="overlay" id="overlay" hidden></div>
+<aside class="drawer" id="profile" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle" tabindex="-1">
+  <div class="dhead"><b id="pTitle"></b><button class="icon-btn" id="pClose" type="button" data-i18n-aria="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div id="pBody"></div>
+</aside>
 
 <dialog id="dlg" aria-modal="true"></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
+<script src="lang.js"></script>
 <script src="api.js"></script>
 <script src="admin.js"></script>
 <script src="app.js"></script>

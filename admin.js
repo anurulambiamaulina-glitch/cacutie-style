@@ -97,7 +97,7 @@ function editProduct(p) {
     <div class="field"><label for="pKat">Kategori</label><select id="pKat">${opts(KAT, x.kategori)}</select></div>
     <div class="field"><label for="pHarga">Harga (Rp)</label><input id="pHarga" type="number" min="1000" value="${esc(x.harga)}"></div>
     <div class="field"><label for="pLabel">Label</label><select id="pLabel">${opts(LABEL, x.label)}</select></div>
-    <div class="field"><label for="pImg">Tautan gambar (https atau tautan Google Drive, boleh kosong)</label><input id="pImg" value="${esc(x.gambar)}" placeholder="https://..."></div></div>
+    <div class="field"><label for="pImg">Foto produk (satu tautan per baris, maksimal 5; foto pertama jadi foto utama)</label><textarea id="pImg" placeholder="https://...&#10;tautan Google Drive, atau assets/produk/p01.svg">${esc(String(x.gambar || "").split("|").join("\n"))}</textarea></div></div>
     <div class="field"><label for="pDesc">Deskripsi</label><textarea id="pDesc" maxlength="600">${esc(x.deskripsi)}</textarea></div>
     <label class="chk"><input type="checkbox" id="pShow" ${x.tampil ? "checked" : ""}> Tampilkan di toko</label>
     <h3>Varian dan stok</h3><p class="muted">Isi minimal satu varian aktif. Varian yang dihapus hanya dinonaktifkan agar riwayat pesanan tetap utuh.</p>
@@ -162,9 +162,9 @@ function vReviews(pane) {
 /* ---------- Pengaturan toko ---------- */
 function vSettings(pane) {
   const F = [["nama_toko", "Nama toko"], ["slogan", "Slogan"], ["whatsapp_toko", "Nomor WhatsApp toko (contoh 081234567890)"], ["email_toko", "Email toko"], ["alamat_toko", "Alamat toko"], ["jam_operasional", "Jam operasional"],
-    ["info_pengiriman", "Informasi pengiriman"], ["info_transfer", "Info pembayaran manual (rekening, atas nama)"]];
+    ["info_pengiriman", "Informasi pengiriman"], ["gratis_ongkir_min", "Gratis ongkir mulai belanja (Rp, isi 0 jika tidak ada promo)"], ["info_transfer", "Info pembayaran manual (rekening, atas nama)"], ["qris_gambar", "Gambar QRIS (contoh assets/qris.png, tautan https, atau tautan Google Drive)"]];
   return call("adminGetSettings").then(s => {
-    pane.innerHTML = `<div class="card" style="max-width:680px"><h2>Pengaturan toko</h2><p class="muted">Tarif ongkir per jasa kirim diatur di tab Jasa kirim.</p>
+    pane.innerHTML = `<div class="card" style="max-width:680px"><h2>Pengaturan toko</h2><p class="muted">Tarif ongkir per jasa kirim diatur di tab Jasa kirim. Untuk QRIS: unggah gambar QRIS ke folder assets di GitHub (misalnya assets/qris.png), lalu isi kolom Gambar QRIS dengan assets/qris.png. Selama kolom itu kosong, QRIS tidak bisa dipilih pelanggan.</p>
       ${F.map(f => `<div class="field"><label for="s_${f[0]}">${f[1]}</label><input id="s_${f[0]}" value="${esc(s[f[0]] || "")}" maxlength="400"></div>`).join("")}
       <div id="sMsg"></div><button class="btn" id="sSave" data-loading="Menyimpan...">Simpan pengaturan</button></div>`;
     $("#sSave").onclick = () => {
@@ -195,26 +195,29 @@ function vCouriers(pane) {
   });
 }
 
-/* ---------- Iklan ---------- */
+/* ---------- Iklan (gambar, video, info) ---------- */
 function arow(a) {
-  a = a || { ad_id: "", judul: "", teks: "", gambar: "", tautan: "#/produk", tombol: "Lihat Produk", aktif: true };
+  a = a || { ad_id: "", judul: "", teks: "", gambar: "", video: "", tipe: "gambar", tautan: "#/produk", tombol: "Lihat Produk", aktif: true };
+  const tp = (v, l) => `<option value="${v}" ${a.tipe === v ? "selected" : ""}>${l}</option>`;
   return `<div class="card arow" data-id="${esc(a.ad_id)}" style="margin-bottom:12px"><div class="row two">
+    <div class="field"><label>Jenis iklan</label><select>${tp("gambar", "Gambar")}${tp("video", "Video")}${tp("info", "Info teks (tanpa gambar)")}</select></div>
     <div class="field"><label>Judul iklan</label><input maxlength="60" value="${esc(a.judul)}"></div>
-    <div class="field"><label>Teks tombol (boleh kosong)</label><input maxlength="20" value="${esc(a.tombol)}"></div>
     <div class="field"><label>Teks singkat</label><input maxlength="140" value="${esc(a.teks)}"></div>
-    <div class="field"><label>Tautan (#/produk, #/produk/P02, atau https://...)</label><input maxlength="300" value="${esc(a.tautan)}"></div></div>
-    <div class="field"><label>Gambar (https, tautan Google Drive, atau assets/...; boleh kosong)</label><input maxlength="500" value="${esc(a.gambar)}"></div>
+    <div class="field"><label>Teks tombol (boleh kosong)</label><input maxlength="20" value="${esc(a.tombol)}"></div>
+    <div class="field"><label>Tautan (#/produk, #/produk/P02, atau https://...)</label><input maxlength="300" value="${esc(a.tautan)}"></div>
+    <div class="field"><label>Gambar (https, Google Drive, atau assets/...)</label><input maxlength="500" value="${esc(a.gambar)}"></div></div>
+    <div class="field"><label>Video, untuk jenis Video (YouTube, Google Drive, atau file .mp4 berupa https/assets)</label><input maxlength="500" value="${esc(a.video)}"></div>
     <div style="display:flex;justify-content:space-between;align-items:center"><label class="chk" style="margin:0"><input type="checkbox" ${a.aktif ? "checked" : ""}> Tampilkan di beranda</label><button type="button" class="btn sm ghost" data-rm>Hapus iklan</button></div></div>`;
 }
 function vAds(pane) {
   return call("adminListAds").then(list => {
-    pane.innerHTML = `<div style="max-width:860px"><h2>Iklan di beranda</h2><p class="muted">Banner iklan tampil di beranda toko dengan label "Iklan". Maksimal 6.</p>
+    pane.innerHTML = `<div style="max-width:860px"><h2>Iklan di beranda</h2><p class="muted">Iklan tampil di beranda dengan label "Iklan". Maksimal 6. Banner <b>GRATIS ONGKIR</b> muncul otomatis dari pengaturan toko (kolom Gratis ongkir mulai belanja), jadi tidak perlu dibuat di sini.</p>
       <div id="alist">${list.map(arow).join("")}</div><button type="button" class="btn sm ghost" id="addA">Tambah iklan</button>
       <div id="aMsg" style="margin:12px 0"></div><button class="btn" id="aSave" data-loading="Menyimpan...">Simpan iklan</button></div>`;
     $("#addA").onclick = () => { if (document.querySelectorAll("#alist .arow").length >= 6) return toast("Maksimal 6 iklan.", "error"); $("#alist").insertAdjacentHTML("beforeend", arow()); };
     $("#alist").onclick = e => { if (e.target.dataset.rm !== undefined && confirm("Hapus iklan ini? Perubahan baru tersimpan setelah menekan Simpan iklan.")) e.target.closest(".arow").remove(); };
     $("#aSave").onclick = () => {
-      const l = [...document.querySelectorAll("#alist .arow")].map(r => { const i = r.querySelectorAll("input"); return { ad_id: r.dataset.id, judul: i[0].value.trim(), tombol: i[1].value.trim(), teks: i[2].value.trim(), tautan: i[3].value.trim(), gambar: i[4].value.trim(), aktif: i[5].checked }; });
+      const l = [...document.querySelectorAll("#alist .arow")].map(r => { const i = r.querySelectorAll("input"); return { ad_id: r.dataset.id, tipe: r.querySelector("select").value, judul: i[0].value.trim(), teks: i[1].value.trim(), tombol: i[2].value.trim(), tautan: i[3].value.trim(), gambar: i[4].value.trim(), video: i[5].value.trim(), aktif: i[6].checked }; });
       API.busy($("#aSave"), () => call("adminSaveAds", { list: l })).then(r => { if (r) { $("#aMsg").innerHTML = notice("Iklan tersimpan.", "ok"); toast("Iklan tersimpan.", "ok"); } })
         .catch(e => { $("#aMsg").innerHTML = notice(e.message, "error"); });
     };
