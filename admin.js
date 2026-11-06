@@ -97,7 +97,7 @@ function editProduct(p) {
     <div class="field"><label for="pKat">Kategori</label><select id="pKat">${opts(KAT, x.kategori)}</select></div>
     <div class="field"><label for="pHarga">Harga (Rp)</label><input id="pHarga" type="number" min="1000" value="${esc(x.harga)}"></div>
     <div class="field"><label for="pLabel">Label</label><select id="pLabel">${opts(LABEL, x.label)}</select></div>
-    <div class="field"><label for="pImg">Foto produk (satu tautan per baris, maksimal 5; foto pertama jadi foto utama)</label><textarea id="pImg" placeholder="https://...&#10;tautan Google Drive, atau assets/produk/p01.svg">${esc(String(x.gambar || "").split("|").join("\n"))}</textarea></div></div>
+    <div class="field"><label for="pImg">Foto produk (satu tautan per baris, maksimal 5; foto pertama jadi foto utama)</label><textarea id="pImg" placeholder="https://...&#10;tautan Google Drive, atau assets/produk/p01.jpeg">${esc(String(x.gambar || "").split("|").join("\n"))}</textarea></div></div>
     <div class="field"><label for="pDesc">Deskripsi</label><textarea id="pDesc" maxlength="600">${esc(x.deskripsi)}</textarea></div>
     <label class="chk"><input type="checkbox" id="pShow" ${x.tampil ? "checked" : ""}> Tampilkan di toko</label>
     <h3>Varian dan stok</h3><p class="muted">Isi minimal satu varian aktif. Varian yang dihapus hanya dinonaktifkan agar riwayat pesanan tetap utuh.</p>
