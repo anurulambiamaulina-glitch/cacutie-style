@@ -44,7 +44,7 @@ nav.main{display:flex;justify-content:center;gap:4px;padding:0 0 10px;flex-wrap:
 nav.main a{padding:7px 14px;border-radius:999px;color:var(--cocoa);text-decoration:none;font-size:.88rem;font-weight:500;white-space:nowrap;transition:background .2s,color .2s}
 nav.main a:hover{background:var(--beige)}
 nav.main a.on{background:var(--cocoa);color:var(--white)}
-.navhead,.burger{display:none}
+.navhead,.icon-btn.burger{display:none}
 .icon-btn{position:relative;width:42px;height:42px;border-radius:50%;border:0;background:transparent;color:var(--cocoa);cursor:pointer;display:grid;place-items:center;text-decoration:none}
 .icon-btn:hover,.icon-btn.on{background:var(--beige)}
 .icon-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -54,7 +54,7 @@ nav.main a.on{background:var(--cocoa);color:var(--white)}
 .lang button[aria-pressed=true]{background:var(--cocoa);color:var(--white)}
 .annc{background:var(--cocoa);color:var(--cream);text-align:center;font-size:.82rem;font-weight:600;letter-spacing:.03em;padding:7px 12px}
 @media(max-width:900px){
-  .burger{display:grid}
+  .icon-btn.burger{display:grid}
   .bar{flex-wrap:wrap;gap:6px;padding:8px 0}
   .logo{margin-right:auto}
   .hsearch{order:5;flex:1 0 100%;max-width:none;margin:0 0 4px}
