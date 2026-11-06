@@ -213,7 +213,7 @@ footer#footer{margin-top:40px}
 .ad.info .adlabel{color:var(--beige)} .ad.info .btn{background:var(--cream);color:var(--cocoa);border-color:var(--cream)}
 .ad.video{flex-direction:column}
 @media(min-width:760px){.ad.video{grid-column:1/-1}}
-.adv{aspect-ratio:16/9;background:#000}.adv iframe,.adv video{width:100%;height:100%;border:0;display:block}
+.adv{aspect-ratio:16/9;background:#000}.adv iframe,.adv video{width:10%;height:10%;border:0;display:block}
 .headline{background:var(--beige);border-radius:14px;padding:16px;margin-bottom:16px;display:grid;gap:2px}
 .headline small{color:#6d5449}.headline b{font:600 1.3rem var(--serif)}
 .headline.process,.headline.pack,.headline.ship{background:#F5E4C8}.headline.done{background:#DDEBDD}.headline.cancel{background:#F3D9D6}
