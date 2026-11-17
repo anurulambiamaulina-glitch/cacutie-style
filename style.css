@@ -282,3 +282,11 @@ body.navopen header.top{z-index:100}
 .chip{padding:7px 14px;border:0;border-radius:999px;background:var(--beige);color:var(--cocoa);font:500 .88rem var(--sans);cursor:pointer}
 .chip:hover{background:var(--latte)}
 #returSection,#contactSection,#faqSection{scroll-margin-top:150px}
+
+/* ===== Revisi 6: kotak pencarian di tengah (sejajar dengan baris menu) ===== */
+@media(min-width:901px){
+  #shop .bar{display:grid;grid-template-columns:1fr minmax(260px,440px) 1fr;align-items:center;gap:12px}
+  #shop .bar .logo{justify-self:start}
+  #shop .bar .hsearch{margin:0;max-width:none;width:100%}
+  #shop .bar .actions{justify-self:end;margin-left:0}
+}
