@@ -128,3 +128,6 @@ Object.assign(window.CS_LANG.en, {
 
 Object.assign(window.CS_LANG.id, { "ad.free.short":"Min. belanja {min}", "fad.close":"Tutup iklan" });
 Object.assign(window.CS_LANG.en, { "ad.free.short":"Min. spend {min}", "fad.close":"Close ad" });
+
+Object.assign(window.CS_LANG.id, { "help.faq":"Pertanyaan umum", "faq.a8":"Lihat bagian <a href=\"#/retur\">Cara Retur</a> di halaman ini untuk langkah lengkapnya." });
+Object.assign(window.CS_LANG.en, { "help.faq":"FAQ", "faq.a8":"See the <a href=\"#/retur\">How to Return an Item</a> section on this page for the full steps." });

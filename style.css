@@ -276,3 +276,9 @@ body.navopen header.top{z-index:100}
 .fclose{position:absolute;top:5px;right:5px;width:26px;height:26px;border:0;border-radius:50%;background:var(--beige);color:var(--cocoa);font-size:1.15rem;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
 .fclose:hover{background:var(--latte)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* ===== Revisi 5: Cara Retur di dalam Bantuan ===== */
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.chip{padding:7px 14px;border:0;border-radius:999px;background:var(--beige);color:var(--cocoa);font:500 .88rem var(--sans);cursor:pointer}
+.chip:hover{background:var(--latte)}
+#returSection,#contactSection,#faqSection{scroll-margin-top:150px}

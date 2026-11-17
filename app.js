@@ -179,7 +179,7 @@ function hashInfo() {
 }
 function markNav() { // penanda menu aktif (pil gelap) sesuai halaman dan kategori yang sedang dibuka
   const { parts, qs } = hashInfo(), name = parts[0] || "home";
-  const key = name === "produk" && !parts[1] && qs.kat ? "kat:" + qs.kat : name;
+  const key = name === "produk" && !parts[1] && qs.kat ? "kat:" + qs.kat : (name === "retur" ? "faq" : name);
   $$("#nav a[data-key]").forEach(a => { const on = a.dataset.key === key; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
 }
 function closeAll() { document.body.classList.remove("navopen"); $("#overlay").hidden = true; $("#profile").hidden = true; $("#nav").classList.remove("open"); $("#btnMenu").setAttribute("aria-expanded", "false"); }
@@ -193,8 +193,8 @@ function route() {
     case "keranjang": return withData(vCart);
     case "checkout": return withData(vCheckout, true);
     case "lacak": return withData(() => vTrack(qs.kode || ""));
-    case "faq": return withData(vInfo);
-    case "retur": return withData(vReturn);
+    case "faq": return withData(() => vInfo(false));
+    case "retur": return withData(() => vInfo(true)); // Cara Retur ada di dalam halaman Bantuan
     case "masuk": return vAuth();
     case "akun": return vAccount(qs);
     default: show(`<div class="empty"><h2>${t("nf.title")}</h2><p>${t("nf.text")}</p><a class="btn" href="#/">${t("nf.back")}</a></div>`);
@@ -653,22 +653,27 @@ function vAccount(qs) {
 }
 
 /* ---------- Cara retur ---------- */
-function vReturn() {
+function returnCard() { // dipakai di dalam halaman Bantuan
   const s = S.settings, days = Number(s.retur_hari) || 3;
-  const custom = String(s.info_retur || "").split("\n").map(x => x.trim()).filter(Boolean);
+  const txt = (lang === "en" && s.info_retur_en) ? s.info_retur_en : (s.info_retur || "");
+  const custom = String(txt).split("\n").map(x => x.trim()).filter(Boolean);
   const steps = custom.length ? custom : [1, 2, 3, 4, 5].map(i => t("rt.step" + i, { days }));
-  show(`<section class="section"><div class="card" style="max-width:760px"><h1>${t("rt.title")}</h1><p class="muted">${t("rt.intro", { days })}</p>
+  return `<div class="card" id="returSection" style="max-width:760px;margin-bottom:16px"><h2>${t("rt.title")}</h2><p class="muted">${t("rt.intro", { days })}</p>
     <ol class="rsteps">${steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="#/lacak">${t("rt.cta")}</a>${waA(t("wa.ask.return"), "&#128172; " + t("wa.contact"), "btn ghost")}</div></div></section>`);
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="#/lacak">${t("rt.cta")}</a>${waA(t("wa.ask.return"), "&#128172; " + t("wa.contact"), "btn ghost")}</div></div>`;
 }
 
 /* ---------- Bantuan (FAQ) ---------- */
-function vInfo() {
+function vInfo(toRetur) {
   const s = S.settings, wa = waNum();
   const contact = [wa ? "WhatsApp: +" + esc(wa) : "", s.email_toko ? "Email: " + esc(s.email_toko) : "", s.jam_operasional ? esc(s.jam_operasional) : ""].filter(Boolean);
-  show(`<section class="section"><div class="card" style="max-width:760px"><h1>${t("nav.help")}</h1>
-    ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `<details ${i === 1 ? "open" : ""}><summary><b>${t("faq.q" + i)}</b></summary><p>${t("faq.a" + i)}</p></details>`).join("")}
-    <h2>${t("f.contact")}</h2>${contact.length ? `<ul>${contact.map(c => `<li>${c}</li>`).join("")}</ul>` : ""}<p>${waA(t("wa.ask.general"), "&#128172; " + t("wa.contact"), "btn")}</p></div></section>`);
+  show(`<section class="section"><div class="card" style="max-width:760px;margin-bottom:16px" id="faqSection"><h1>${t("nav.help")}</h1>
+    <div class="chips"><button type="button" class="chip" data-go="faqSection">${t("help.faq")}</button><button type="button" class="chip" data-go="returSection">${t("rt.title")}</button><button type="button" class="chip" data-go="contactSection">${t("f.contact")}</button></div>
+    ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `<details ${i === 1 ? "open" : ""}><summary><b>${t("faq.q" + i)}</b></summary><p>${t("faq.a" + i)}</p></details>`).join("")}</div>
+    ${returnCard()}
+    <div class="card" id="contactSection" style="max-width:760px"><h2>${t("f.contact")}</h2>${contact.length ? `<ul>${contact.map(c => `<li>${c}</li>`).join("")}</ul>` : ""}<p>${waA(t("wa.ask.general"), "&#128172; " + t("wa.contact"), "btn")}</p></div></section>`);
+  app.onclick = e => { const b = e.target.closest("[data-go]"); if (!b) return; const el = $("#" + b.dataset.go); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  if (toRetur) setTimeout(() => { const el = $("#returSection"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50);
 }
 
 /* ---------- Panel profil (sidebar kanan) ---------- */
