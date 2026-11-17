@@ -38,7 +38,7 @@ $("#logout").onclick = () => { ADM.logout().catch(() => {}).then(() => showLogin
 /* ---------- Kerangka ---------- */
 function showApp() {
   $("#logout").hidden = false;
-  const tabs = [["ringkasan", "Ringkasan"], ["produk", "Produk"], ["pesanan", "Pesanan"], ["ulasan", "Ulasan"], ["kurir", "Jasa kirim"], ["iklan", "Iklan"], ["pengaturan", "Pengaturan toko"]];
+  const tabs = [["ringkasan", "Ringkasan"], ["laporan", "Laporan"], ["produk", "Produk"], ["pesanan", "Pesanan"], ["aftersales", "After Sales"], ["ulasan", "Ulasan"], ["kurir", "Jasa kirim"], ["iklan", "Iklan"], ["pengaturan", "Pengaturan toko"]];
   root.innerHTML = `<div class="admin-tabs" role="tablist" aria-label="Menu admin">${tabs.map(t => `<button role="tab" data-t="${t[0]}" aria-selected="${tab === t[0]}">${t[1]}</button>`).join("")}</div><div id="pane"></div>`;
   $(".admin-tabs").onclick = e => { const b = e.target.closest("button"); if (!b) return; tab = b.dataset.t; $$tabs(); render(); };
   render();
@@ -46,7 +46,7 @@ function showApp() {
 function $$tabs() { document.querySelectorAll(".admin-tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.t === tab)); }
 function render() {
   const pane = $("#pane"); pane.innerHTML = '<div class="loading"><div class="spin"></div>Memuat...</div>';
-  ({ ringkasan: vSummary, produk: vProducts, pesanan: vOrders, ulasan: vReviews, kurir: vCouriers, iklan: vAds, pengaturan: vSettings })[tab](pane)
+  ({ ringkasan: vSummary, produk: vProducts, pesanan: vOrders, ulasan: vReviews, laporan: vReport, aftersales: vAfterSales, kurir: vCouriers, iklan: vAds, pengaturan: vSettings })[tab](pane)
     .catch(e => { if (e.code !== "UNAUTHORIZED") pane.innerHTML = notice(e.message, "error"); });
 }
 function modal(html) { dlg.innerHTML = html; if (!dlg.open) dlg.showModal(); }
@@ -58,7 +58,7 @@ function vSummary(pane) {
     pane.innerHTML = `<div class="stats">
       <div class="card stat"><span class="muted">Produk</span><b>${d.produk}</b></div><div class="card stat"><span class="muted">Varian</span><b>${d.varian}</b></div>
       <div class="card stat"><span class="muted">Total pesanan</span><b>${d.pesanan}</b></div><div class="card stat"><span class="muted">Perlu diproses</span><b>${d.perlu_diproses}</b></div>
-      <div class="card stat"><span class="muted">Penjualan terbayar</span><b>${rp(d.penjualan_terbayar)}</b></div></div>
+      <div class="card stat"><span class="muted">Penjualan terbayar</span><b>${rp(d.penjualan_terbayar)}</b></div><div class="card stat"><span class="muted">Follow-up after sales</span><b>${d.aftersales_menunggu}</b></div><div class="card stat"><span class="muted">Retur baru</span><b>${d.retur_baru}</b></div></div>
       <p class="muted">Penjualan terbayar = jumlah total pesanan berstatus pembayaran "Sudah dibayar" yang tidak dibatalkan. Angka berasal dari sheet Pesanan.</p>
       <div class="card"><h2>Stok rendah (3 atau kurang)</h2>${d.stok_rendah.length ? `<div class="tablewrap"><table><thead><tr><th>Produk</th><th>Varian</th><th>Stok</th></tr></thead><tbody>${d.stok_rendah.map(s => `<tr><td>${esc(s.produk)}</td><td>${esc(s.warna)}, ${esc(s.ukuran)}</td><td>${s.stok}</td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Tidak ada varian dengan stok rendah.</p>"}</div>`;
   });
@@ -97,8 +97,13 @@ function editProduct(p) {
     <div class="field"><label for="pKat">Kategori</label><select id="pKat">${opts(KAT, x.kategori)}</select></div>
     <div class="field"><label for="pHarga">Harga (Rp)</label><input id="pHarga" type="number" min="1000" value="${esc(x.harga)}"></div>
     <div class="field"><label for="pLabel">Label</label><select id="pLabel">${opts(LABEL, x.label)}</select></div>
-    <div class="field"><label for="pImg">Foto produk (satu tautan per baris, maksimal 5; foto pertama jadi foto utama)</label><textarea id="pImg" placeholder="https://...&#10;tautan Google Drive, atau assets/produk/p01.jpeg">${esc(String(x.gambar || "").split("|").join("\n"))}</textarea></div></div>
+    <div class="field"><label for="pImg">Foto produk (satu tautan per baris, maksimal 5; foto pertama jadi foto utama)</label><textarea id="pImg" placeholder="https://...&#10;tautan Google Drive, atau assets/produk/p01.svg">${esc(String(x.gambar || "").split("|").join("\n"))}</textarea></div></div>
     <div class="field"><label for="pDesc">Deskripsi</label><textarea id="pDesc" maxlength="600">${esc(x.deskripsi)}</textarea></div>
+    <div class="field"><label for="pUk">Panduan ukuran (satu baris per ukuran, format <b>Ukuran: keterangan</b>, maksimal 12 baris)</label><textarea id="pUk" placeholder="M: panjang baju 60 cm, lingkar dada 100 cm&#10;L: panjang baju 62 cm, lingkar dada 104 cm">${esc(x.ukuran_info || "")}</textarea></div>
+    <p class="muted" style="margin:0 0 8px">English: kosongkan untuk diterjemahkan otomatis saat disimpan (terjemahan mesin Google, periksa hasilnya). Isi sendiri bila ingin terjemahan yang lebih tepat.</p>
+    <div class="field"><label for="pNamaEn">Nama produk (English)</label><input id="pNamaEn" maxlength="80" value="${esc(x.nama_en || "")}"></div>
+    <div class="field"><label for="pDescEn">Deskripsi (English)</label><textarea id="pDescEn" maxlength="600">${esc(x.deskripsi_en || "")}</textarea></div>
+    <div class="field"><label for="pUkEn">Panduan ukuran (English)</label><textarea id="pUkEn">${esc(x.ukuran_info_en || "")}</textarea></div>
     <label class="chk"><input type="checkbox" id="pShow" ${x.tampil ? "checked" : ""}> Tampilkan di toko</label>
     <h3>Varian dan stok</h3><p class="muted">Isi minimal satu varian aktif. Varian yang dihapus hanya dinonaktifkan agar riwayat pesanan tetap utuh.</p>
     <div id="vlist">${(x.varian.length ? x.varian : [null]).map(vrow).join("")}</div><button type="button" class="btn sm ghost" id="addV">Tambah varian</button>
@@ -107,7 +112,7 @@ function editProduct(p) {
   $("#vlist").onclick = e => { if (e.target.dataset.rm !== undefined) e.target.closest(".vrow").remove(); };
   $("#pSave").onclick = () => {
     const varian = [...document.querySelectorAll("#vlist .vrow")].map(r => { const i = r.querySelectorAll("input"); return { variant_id: r.dataset.vid, warna: i[0].value.trim(), ukuran: i[1].value.trim(), stok: Number(i[2].value), aktif: i[3].checked }; });
-    const data = { product_id: x.product_id, sku: $("#pSku").value, nama: $("#pNama").value, kategori: $("#pKat").value, harga: Number($("#pHarga").value), label: $("#pLabel").value, gambar: $("#pImg").value, deskripsi: $("#pDesc").value, tampil: $("#pShow").checked, varian };
+    const data = { product_id: x.product_id, sku: $("#pSku").value, nama: $("#pNama").value, kategori: $("#pKat").value, harga: Number($("#pHarga").value), label: $("#pLabel").value, gambar: $("#pImg").value, deskripsi: $("#pDesc").value, ukuran_info: $("#pUk").value, nama_en: $("#pNamaEn").value, deskripsi_en: $("#pDescEn").value, ukuran_info_en: $("#pUkEn").value, tampil: $("#pShow").checked, varian };
     API.busy($("#pSave"), () => call("adminSaveProduct", data)).then(r => { if (r) { dlg.close(); toast("Produk tersimpan.", "ok"); render(); } })
       .catch(e => { $("#pMsg").innerHTML = notice(e.message, "error"); });
   };
@@ -162,10 +167,10 @@ function vReviews(pane) {
 /* ---------- Pengaturan toko ---------- */
 function vSettings(pane) {
   const F = [["nama_toko", "Nama toko"], ["slogan", "Slogan"], ["whatsapp_toko", "Nomor WhatsApp toko (contoh 081234567890)"], ["email_toko", "Email toko"], ["alamat_toko", "Alamat toko"], ["jam_operasional", "Jam operasional"],
-    ["info_pengiriman", "Informasi pengiriman"], ["gratis_ongkir_min", "Gratis ongkir mulai belanja (Rp, isi 0 jika tidak ada promo)"], ["info_transfer", "Info pembayaran manual (rekening, atas nama)"], ["qris_gambar", "Gambar QRIS (contoh assets/qris.png, tautan https, atau tautan Google Drive)"]];
+    ["info_pengiriman", "Informasi pengiriman"], ["gratis_ongkir_min", "Gratis ongkir mulai belanja (Rp, isi 0 jika tidak ada promo)"], ["info_transfer", "Info pembayaran manual (rekening, atas nama)"], ["cod_maks", "Batas total pesanan untuk COD (Rp, isi 0 jika tanpa batas)"], ["retur_hari", "Batas hari pengajuan retur setelah pesanan selesai"], ["info_retur", "Langkah cara retur (satu langkah per baris; kosongkan untuk memakai teks bawaan)"], ["info_retur_en", "Cara retur dalam English (kosongkan untuk terjemahan otomatis)"], ["qris_gambar", "Gambar QRIS (contoh assets/qris.png, tautan https, atau tautan Google Drive)"]];
   return call("adminGetSettings").then(s => {
     pane.innerHTML = `<div class="card" style="max-width:680px"><h2>Pengaturan toko</h2><p class="muted">Tarif ongkir per jasa kirim diatur di tab Jasa kirim. Untuk QRIS: unggah gambar QRIS ke folder assets di GitHub (misalnya assets/qris.png), lalu isi kolom Gambar QRIS dengan assets/qris.png. Selama kolom itu kosong, QRIS tidak bisa dipilih pelanggan.</p>
-      ${F.map(f => `<div class="field"><label for="s_${f[0]}">${f[1]}</label><input id="s_${f[0]}" value="${esc(s[f[0]] || "")}" maxlength="400"></div>`).join("")}
+      ${F.map(f => (f[0] === "info_retur" || f[0] === "info_retur_en") ? `<div class="field"><label for="s_${f[0]}">${f[1]}</label><textarea id="s_${f[0]}" maxlength="1500">${esc(s[f[0]] || "")}</textarea></div>` : `<div class="field"><label for="s_${f[0]}">${f[1]}</label><input id="s_${f[0]}" value="${esc(s[f[0]] || "")}" maxlength="400"></div>`).join("")}
       <div id="sMsg"></div><button class="btn" id="sSave" data-loading="Menyimpan...">Simpan pengaturan</button></div>`;
     $("#sSave").onclick = () => {
       const d = {}; F.forEach(f => { d[f[0]] = $("#s_" + f[0]).value; });
@@ -177,8 +182,8 @@ function vSettings(pane) {
 
 /* ---------- Jasa kirim ---------- */
 function crow(k) {
-  k = k || { kurir_id: "", nama: "", tarif: 0, estimasi: "", aktif: true };
-  return `<div class="crow" data-id="${esc(k.kurir_id)}"><input aria-label="Nama jasa kirim" placeholder="Nama (JNE, J&T, ...)" maxlength="30" value="${esc(k.nama)}"><input aria-label="Tarif ongkir (Rp)" type="number" min="0" placeholder="Tarif (Rp)" value="${k.tarif}"><input aria-label="Estimasi tiba" placeholder="Estimasi (opsional)" maxlength="30" value="${esc(k.estimasi)}"><label class="chk" style="margin:0"><input type="checkbox" ${k.aktif ? "checked" : ""}> Aktif</label><button type="button" class="btn sm ghost" data-rm>Hapus</button></div>`;
+  k = k || { kurir_id: "", nama: "", tarif: 0, estimasi: "", aktif: true, cod: true };
+  return `<div class="crow" data-id="${esc(k.kurir_id)}"><input aria-label="Nama jasa kirim" placeholder="Nama (JNE, J&T, ...)" maxlength="30" value="${esc(k.nama)}"><input aria-label="Tarif ongkir (Rp)" type="number" min="0" placeholder="Tarif (Rp)" value="${k.tarif}"><input aria-label="Estimasi tiba" placeholder="Estimasi (opsional)" maxlength="30" value="${esc(k.estimasi)}"><label class="chk" style="margin:0"><input type="checkbox" ${k.aktif ? "checked" : ""}> Aktif</label><label class="chk" style="margin:0"><input type="checkbox" ${k.cod ? "checked" : ""}> COD</label><button type="button" class="btn sm ghost" data-rm>Hapus</button></div>`;
 }
 function vCouriers(pane) {
   return call("adminListCouriers").then(list => {
@@ -188,7 +193,7 @@ function vCouriers(pane) {
     $("#addC").onclick = () => $("#clist").insertAdjacentHTML("beforeend", crow());
     $("#clist").onclick = e => { if (e.target.dataset.rm !== undefined) e.target.closest(".crow").remove(); };
     $("#cSave").onclick = () => {
-      const l = [...document.querySelectorAll("#clist .crow")].map(r => { const i = r.querySelectorAll("input"); return { kurir_id: r.dataset.id, nama: i[0].value.trim(), tarif: Number(i[1].value), estimasi: i[2].value.trim(), aktif: i[3].checked }; });
+      const l = [...document.querySelectorAll("#clist .crow")].map(r => { const i = r.querySelectorAll("input"); return { kurir_id: r.dataset.id, nama: i[0].value.trim(), tarif: Number(i[1].value), estimasi: i[2].value.trim(), aktif: i[3].checked, cod: i[4].checked }; });
       API.busy($("#cSave"), () => call("adminSaveCouriers", { list: l })).then(r => { if (r) { $("#cMsg").innerHTML = notice("Jasa kirim tersimpan.", "ok"); toast("Jasa kirim tersimpan.", "ok"); } })
         .catch(e => { $("#cMsg").innerHTML = notice(e.message, "error"); });
     };
@@ -200,13 +205,14 @@ function arow(a) {
   a = a || { ad_id: "", judul: "", teks: "", gambar: "", video: "", tipe: "gambar", tautan: "#/produk", tombol: "Lihat Produk", aktif: true };
   const tp = (v, l) => `<option value="${v}" ${a.tipe === v ? "selected" : ""}>${l}</option>`;
   return `<div class="card arow" data-id="${esc(a.ad_id)}" style="margin-bottom:12px"><div class="row two">
-    <div class="field"><label>Jenis iklan</label><select>${tp("gambar", "Gambar")}${tp("video", "Video")}${tp("info", "Info teks (tanpa gambar)")}</select></div>
+    <div class="field"><label>Jenis iklan</label><select>${tp("gambar", "Gambar")}${tp("video", "Video")}${tp("info", "Info teks (tanpa gambar)")}${tp("mengambang", "Mengambang (kecil, di pojok layar, bisa ditutup)")}</select></div>
     <div class="field"><label>Judul iklan</label><input maxlength="60" value="${esc(a.judul)}"></div>
     <div class="field"><label>Teks singkat</label><input maxlength="140" value="${esc(a.teks)}"></div>
     <div class="field"><label>Teks tombol (boleh kosong)</label><input maxlength="20" value="${esc(a.tombol)}"></div>
     <div class="field"><label>Tautan (#/produk, #/produk/P02, atau https://...)</label><input maxlength="300" value="${esc(a.tautan)}"></div>
     <div class="field"><label>Gambar (https, Google Drive, atau assets/...)</label><input maxlength="500" value="${esc(a.gambar)}"></div></div>
     <div class="field"><label>Video, untuk jenis Video (YouTube, Google Drive, atau file .mp4 berupa https/assets)</label><input maxlength="500" value="${esc(a.video)}"></div>
+    <div class="row two"><div class="field"><label>Judul (English, kosongkan untuk terjemahan otomatis)</label><input maxlength="80" value="${esc(a.judul_en || "")}"></div><div class="field"><label>Teks singkat (English)</label><input maxlength="160" value="${esc(a.teks_en || "")}"></div><div class="field"><label>Teks tombol (English)</label><input maxlength="30" value="${esc(a.tombol_en || "")}"></div></div>
     <div style="display:flex;justify-content:space-between;align-items:center"><label class="chk" style="margin:0"><input type="checkbox" ${a.aktif ? "checked" : ""}> Tampilkan di beranda</label><button type="button" class="btn sm ghost" data-rm>Hapus iklan</button></div></div>`;
 }
 function vAds(pane) {
@@ -217,9 +223,55 @@ function vAds(pane) {
     $("#addA").onclick = () => { if (document.querySelectorAll("#alist .arow").length >= 6) return toast("Maksimal 6 iklan.", "error"); $("#alist").insertAdjacentHTML("beforeend", arow()); };
     $("#alist").onclick = e => { if (e.target.dataset.rm !== undefined && confirm("Hapus iklan ini? Perubahan baru tersimpan setelah menekan Simpan iklan.")) e.target.closest(".arow").remove(); };
     $("#aSave").onclick = () => {
-      const l = [...document.querySelectorAll("#alist .arow")].map(r => { const i = r.querySelectorAll("input"); return { ad_id: r.dataset.id, tipe: r.querySelector("select").value, judul: i[0].value.trim(), teks: i[1].value.trim(), tombol: i[2].value.trim(), tautan: i[3].value.trim(), gambar: i[4].value.trim(), video: i[5].value.trim(), aktif: i[6].checked }; });
+      const l = [...document.querySelectorAll("#alist .arow")].map(r => { const i = r.querySelectorAll("input"); return { ad_id: r.dataset.id, tipe: r.querySelector("select").value, judul: i[0].value.trim(), teks: i[1].value.trim(), tombol: i[2].value.trim(), tautan: i[3].value.trim(), gambar: i[4].value.trim(), video: i[5].value.trim(), judul_en: i[6].value.trim(), teks_en: i[7].value.trim(), tombol_en: i[8].value.trim(), aktif: i[9].checked }; });
       API.busy($("#aSave"), () => call("adminSaveAds", { list: l })).then(r => { if (r) { $("#aMsg").innerHTML = notice("Iklan tersimpan.", "ok"); toast("Iklan tersimpan.", "ok"); } })
         .catch(e => { $("#aMsg").innerHTML = notice(e.message, "error"); });
+    };
+  });
+}
+
+/* ---------- Laporan pengunjung ---------- */
+function vReport(pane) {
+  const days = vReport.days || 7;
+  return call("adminReport", { days }).then(r => {
+    const max = Math.max(1, r.pengunjung, r.keranjang, r.pesanan), pct = v => v == null ? "-" : v + "%";
+    const bar = (label, n) => `<div class="fn"><span>${label}</span><div class="fbar"><i style="width:${Math.round(n / max * 100)}%"></i></div><b>${n}</b></div>`;
+    pane.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px"><h2 style="margin:0">Laporan</h2><div style="min-width:200px"><label for="rd">Periode</label><select id="rd"><option value="1" ${days === 1 ? "selected" : ""}>Hari ini</option><option value="7" ${days === 7 ? "selected" : ""}>7 hari terakhir</option><option value="30" ${days === 30 ? "selected" : ""}>30 hari terakhir</option></select></div></div>
+      <div class="stats"><div class="card stat"><span class="muted">Pengunjung</span><b>${r.pengunjung}</b></div><div class="card stat"><span class="muted">Memasukkan ke keranjang</span><b>${r.keranjang}</b></div>
+        <div class="card stat"><span class="muted">Pesanan dibuat</span><b>${r.pesanan}</b></div><div class="card stat"><span class="muted">Pesanan terbayar</span><b>${r.terbayar}</b></div><div class="card stat"><span class="muted">Omzet terbayar</span><b>${rp(r.omzet)}</b></div></div>
+      <div class="card" style="margin-bottom:16px"><h3>Alur dari pengunjung sampai pembelian</h3>${bar("Pengunjung", r.pengunjung)}${bar("Masukkan keranjang", r.keranjang)}${bar("Pesanan dibuat", r.pesanan)}
+        <p class="muted" style="margin:8px 0 0">Keranjang dari pengunjung: ${pct(r.konv_keranjang)}. Pesanan dari pengunjung: ${pct(r.konv_pesanan)}.</p></div>
+      <div class="card tablewrap"><table><thead><tr><th>Tanggal</th><th>Pengunjung</th><th>Memasukkan keranjang</th><th>Aksi tambah keranjang</th><th>Pesanan</th><th>Terbayar</th></tr></thead><tbody>${r.harian.slice().reverse().map(h => `<tr><td>${esc(h.tanggal)}</td><td>${h.pengunjung}</td><td>${h.keranjang}</td><td>${h.aksi_keranjang}</td><td>${h.pesanan}</td><td>${h.terbayar}</td></tr>`).join("")}</tbody></table></div>
+      <p class="muted" style="margin-top:12px">Catatan: pengunjung dihitung per <b>browser/perangkat</b> (ID acak di perangkat, tanpa data pribadi), bukan per orang, dan sekitar satu kali per hari per perangkat. Orang yang memblokir penyimpanan browser bisa terhitung lebih dari sekali atau tidak terhitung. Pesanan dan omzet dihitung dari sheet Pesanan (tanpa pesanan dibatalkan). Statistik baru terisi sejak versi ini dipasang.</p>`;
+    $("#rd").onchange = e => { vReport.days = Number(e.target.value); render(); };
+  });
+}
+
+/* ---------- After sales & retur ---------- */
+const HASIL = ["Produk sesuai", "Ada masalah", "Tidak merespons"], STATUS_RETUR = ["Diajukan", "Disetujui", "Ditolak", "Selesai"];
+const waLink = (num, text) => "https://wa.me/" + String(num).replace(/\D/g, "") + "?text=" + encodeURIComponent(text);
+function vAfterSales(pane) {
+  return call("adminAfterSales").then(d => {
+    const msg = a => `Halo ${a.nama}, ini Cacutie Style. Pesanan ${a.kode} sudah sampai ya? Apakah produknya sesuai dengan yang dipesan? Kalau ada masalah (ukuran, kondisi barang, atau lainnya), kabari kami di sini ya. Terima kasih sudah berbelanja!`;
+    pane.innerHTML = `<h2>After Sales</h2><p class="muted" style="max-width:760px">Setelah paket sampai, hubungi pembeli lewat WhatsApp untuk menanyakan apakah produk sesuai dan ada masalah atau tidak. Tombol <b>Chat WhatsApp</b> membuka WhatsApp dengan pesan yang sudah terisi, lalu kamu menekan kirim sendiri (pesan tidak terkirim otomatis). Setelah itu catat hasilnya agar pesanan keluar dari antrean.</p>
+      <div class="card" style="margin-bottom:16px"><h3>Perlu follow-up (${d.antrean.length})</h3>${d.antrean.length ? `<div class="tablewrap"><table><thead><tr><th>Pesanan</th><th>Pembeli</th><th>Status</th><th>Sejak</th><th></th></tr></thead><tbody>${d.antrean.map(a => `<tr><td>${esc(a.kode)}</td><td>${esc(a.nama)}</td><td><span class="pill">${esc(a.status)}</span></td><td>${a.hari} hari</td><td style="white-space:nowrap"><a class="btn sm" target="_blank" rel="noopener" href="${waLink(a.whatsapp, msg(a))}">Chat WhatsApp</a> <button class="btn sm ghost" data-as="${esc(a.order_id)}" data-k="${esc(a.kode)}">Catat hasil</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Tidak ada pesanan yang menunggu follow-up.</p>"}</div>
+      <div class="card" style="margin-bottom:16px"><h3>Permintaan retur (${d.retur.filter(r => r.status === "Diajukan").length} baru)</h3>${d.retur.length ? d.retur.map(r => `<div class="card" style="margin-bottom:10px;background:var(--cream)" data-rid="${esc(r.retur_id)}"><b>${esc(r.kode)}</b> - ${esc(r.nama)} - ${esc(r.produk)}<br><span class="muted">Alasan: ${esc(r.alasan)}${r.catatan ? " - " + esc(r.catatan) : ""} (${esc(r.dibuat)})</span>
+        <div class="row two" style="margin-top:8px"><div class="field"><label>Status</label><select>${STATUS_RETUR.map(x => `<option ${x === r.status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Catatan untuk pembeli</label><input maxlength="500" value="${esc(r.catatan_admin)}"></div></div>
+        <button class="btn sm" data-rsave="1">Simpan</button> <a class="btn sm ghost" target="_blank" rel="noopener" href="${waLink(r.whatsapp, "Halo " + r.nama + ", ini Cacutie Style. Terkait pengajuan retur pesanan " + r.kode + " (" + r.produk + ")...")}">Chat WhatsApp</a></div>`).join("") : "<p class='muted'>Belum ada permintaan retur.</p>"}</div>
+      <div class="card"><h3>Riwayat follow-up</h3>${d.riwayat.length ? `<div class="tablewrap"><table><thead><tr><th>Pesanan</th><th>Pembeli</th><th>Hasil</th><th>Catatan</th><th>Dicatat</th></tr></thead><tbody>${d.riwayat.map(h => `<tr><td>${esc(h.kode)}</td><td>${esc(h.nama)}</td><td><span class="pill">${esc(h.hasil)}</span></td><td>${esc(h.catatan)}</td><td>${esc(h.dibuat)}</td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Belum ada riwayat.</p>"}</div>`;
+    pane.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.as) {
+        modal(`<h2>Catat hasil follow-up ${esc(b.dataset.k)}</h2><div class="field"><label for="asHasil">Hasil</label><select id="asHasil">${HASIL.map(h => `<option>${h}</option>`).join("")}</select></div>
+          <div class="field"><label for="asCat">Catatan</label><textarea id="asCat" maxlength="500" placeholder="Contoh: pembeli puas, atau ukuran kekecilan dan minta tukar"></textarea></div>
+          <div id="asMsg"></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn ghost" data-close>Batal</button><button class="btn" id="asSave" data-loading="Menyimpan...">Simpan</button></div>`);
+        $("#asSave").onclick = () => API.busy($("#asSave"), () => call("adminAfterSalesSave", { order_id: b.dataset.as, hasil: $("#asHasil").value, catatan: $("#asCat").value }))
+          .then(r => { if (r) { dlg.close(); toast("Hasil follow-up tersimpan.", "ok"); render(); } }).catch(er => { $("#asMsg").innerHTML = notice(er.message, "error"); });
+      } else if (b.dataset.rsave) {
+        const box = b.closest("[data-rid]");
+        API.busy(b, () => call("adminReturUpdate", { retur_id: box.dataset.rid, status: box.querySelector("select").value, catatan_admin: box.querySelector("input").value }))
+          .then(r => { if (r) toast("Status retur tersimpan.", "ok"); }).catch(er => toast(er.message, "error"));
+      }
     };
   });
 }

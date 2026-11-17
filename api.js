@@ -96,6 +96,9 @@
     return Promise.resolve().then(fn).then(function (r) { back(); return r; }, function (e) { back(); throw e; });
   }
 
+  // ID anonim per perangkat untuk statistik pengunjung (tidak berisi data pribadi)
+  function vid() { try { var v = w.localStorage.getItem("cs_vid"); if (!v) { v = rid(); w.localStorage.setItem("cs_vid", v); } return v; } catch (e) { return rid(); } }
+
   w.CSApi = {
     ApiError: ApiError, newKey: rid, busy: busy,
     bootstrap: function () { return get("bootstrap"); },
@@ -105,13 +108,16 @@
     createOrder: function (o) { return post("createOrder", o, ctok()); },
     trackOrder: function (kode, whatsapp) { return post("trackOrder", { kode: kode, whatsapp: whatsapp || "" }, ctok()); },
     submitReview: function (r) { return post("submitReview", r, ctok()); },
+    submitReturn: function (r) { return post("submitReturn", r, ctok()); },
+    track: function (type, ref) { return post("track", { type: type, vid: vid(), ref: ref || "" }); },
     cust: {
       has: function () { return !!ctok(); },
       register: function (d) { return post("custRegister", d).then(function (r) { setCtok(r.token); return r; }); },
       login: function (email, password) { return post("custLogin", { email: email, password: password }).then(function (r) { setCtok(r.token); return r; }); },
       logout: function () { var t = ctok(); setCtok(null); return t ? post("custLogout", {}, t).catch(function () {}) : Promise.resolve(); },
       session: function () { return custCall("custSession", {}); },
-      orders: function () { return custCall("custOrders", {}); }
+      orders: function () { return custCall("custOrders", {}); },
+      saveAddress: function (alamat, kota) { return custCall("custSaveAddress", { alamat: alamat, kota: kota }); }
     },
     admin: {
       has: function () { return !!tok(); },
