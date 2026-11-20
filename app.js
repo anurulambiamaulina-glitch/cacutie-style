@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 const A = window.CSApi, L = window.CS_LANG;
-const S = { cust: null, couriers: [], ads: [], products: null, settings: {}, idx: {}, co: { step: 2, form: {}, metode: "Transfer Bank", key: null, done: null } };
+const S = { banks: [], cust: null, couriers: [], ads: [], products: null, settings: {}, idx: {}, co: { step: 2, form: {}, metode: "Transfer Bank", key: null, done: null } };
 const CART_KEY = "cs_cart_v1", ORD_KEY = "cs_orders_v1", LANG_KEY = "cs_lang", MODE_KEY = "cs_mode";
 
 /* ---------- Util ---------- */
@@ -37,7 +37,13 @@ function applyStatic() {
   $$("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
   $$("[data-i18n-aria]").forEach(el => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
   $$(".lang button").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === lang));
+  labelTheme();
 }
+/* ---------- Tema terang / gelap ---------- */
+const THEME_KEY = "cs_theme";
+const curTheme = () => document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+function labelTheme() { const l = t(curTheme() === "dark" ? "theme.to_light" : "theme.to_dark"); $$(".themebtn").forEach(b => { b.setAttribute("aria-label", l); b.title = l; }); }
+function applyTheme(th, persist) { document.documentElement.setAttribute("data-theme", th); if (persist) { try { localStorage.setItem(THEME_KEY, th); } catch (e) {} } labelTheme(); }
 function setLang(l) {
   if (!L[l]) return; lang = l; save(LANG_KEY, l); applyStatic(); updateAcct(); renderAnnc(); renderFooter();
   if (!$("#shop").hidden) route();
@@ -48,12 +54,27 @@ function toast(msg, type) { const el = document.createElement("div"); el.classNa
 function show(html) { app.onclick = null; app.innerHTML = html; app.focus({ preventScroll: true }); window.scrollTo(0, 0); }
 const loading = () => show(`<div class="loading"><div class="spin"></div>${t("loading")}</div>`);
 const notice = (msg, type) => `<div class="notice ${type || ""}" role="${type === "error" ? "alert" : "status"}">${esc(msg)}</div>`;
+const addBiz = (d, n) => { const x = new Date(d.getTime()); while (n > 0) { x.setDate(x.getDate() + 1); if (x.getDay() !== 0) n--; } return x; }; // hari Minggu tidak dihitung
+const parseTs = s => { const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : new Date(); };
+function etaText(min, max, start) {
+  if (!max) return "";
+  const a = addBiz(start, min), b = addBiz(start, max), loc = lang === "en" ? "en-GB" : "id-ID";
+  const f = (d, y) => d.toLocaleDateString(loc, y ? { day: "numeric", month: "short", year: "numeric" } : { day: "numeric", month: "short" });
+  return a.getTime() === b.getTime() ? f(a, true) : f(a, false) + " - " + f(b, true);
+}
+function etaLine(o) {
+  if (!o.est_max || o.status === "Selesai" || o.status === "Dibatalkan") return "";
+  const shipped = (o.riwayat || []).find(r => r.jenis === "status" && r.nilai === "Dikirim");
+  const start = shipped ? parseTs(shipped.waktu) : addBiz(parseTs(o.dibuat), o.hari_proses || 0);
+  return `<p class="eta"><b>${t("eta.label")}:</b> ${etaText(o.est_min, o.est_max, start)}<br><span class="muted">${t(shipped ? "eta.note.ship" : "eta.note", { days: o.hari_proses || 0 })}</span></p>`;
+}
 const fmtT = s => s ? String(s).slice(8, 10) + "/" + String(s).slice(5, 7) + " " + String(s).slice(11, 16) : "";
 
 /* ---------- WhatsApp ---------- */
 const waNum = () => String(S.settings.whatsapp_toko || "").replace(/\D/g, "");
 const waUrl = text => "https://wa.me/" + waNum() + "?text=" + encodeURIComponent(text);
 const waA = (text, label, cls) => waNum() ? `<a class="${cls || ""}" href="${waUrl(text)}" target="_blank" rel="noopener">${label}</a>` : `<a class="${cls || ""}" href="#" data-nowa>${label}</a>`;
+document.addEventListener("click", e => { const c = e.target.closest("[data-copy]"); if (c) { const v = c.dataset.copy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast(t("copy.ok"), "ok")).catch(() => toast(t("done.copy.manual") + " " + v)); } });
 document.addEventListener("click", e => { const a = e.target.closest("[data-nowa]"); if (a) { e.preventDefault(); toast(t("wa.notset"), "error"); } });
 function updateFab(text) {
   const f = $("#waFab"); text = text || t("wa.ask.general");
@@ -73,7 +94,7 @@ function renderFloatAd() {
   if (!a || closed || name === "checkout" || $("#shop").hidden) { box.hidden = true; return; }
   const ext = /^https:/.test(a.tautan || ""), tx = pick(a, "teks");
   const inner = `${a.gambar ? `<img src="${esc(imgSrc(a.gambar))}" alt="">` : ""}<span class="ftxt"><small>${a.promo ? t("ad.promo") : t("ad.label")}</small><b>${esc(pick(a, "judul"))}</b>${tx ? `<span>${esc(tx)}</span>` : ""}</span>`;
-  box.innerHTML = `<button type="button" class="fclose" aria-label="${esc(t("fad.close"))}">&times;</button>` + (a.tautan ? `<a class="fbody" href="${esc(a.tautan)}" ${ext ? 'target="_blank" rel="noopener"' : ""}>${inner}</a>` : `<div class="fbody">${inner}</div>`);
+  box.innerHTML = `<button type="button" class="fclose" aria-label="${esc(t("fad.close"))}">&times;</button>` + (a.tautan ? `<a class="fbody" href="${esc(adLink(a.tautan))}" ${ext ? 'target="_blank" rel="noopener"' : ""}>${inner}</a>` : `<div class="fbody">${inner}</div>`);
   $(".fclose", box).onclick = () => { box.hidden = true; try { sessionStorage.setItem("cs_fad", String(a.id)); } catch (e) {} };
   box.hidden = false;
 }
@@ -93,7 +114,7 @@ function addToCart(vid, qty) { const c = getCart(), it = c.find(x => x.vid === v
 function indexData() { S.idx = {}; S.products.forEach(p => p.varian.forEach(v => { S.idx[v.id] = { p, v }; })); }
 function ensureData(force) {
   if (S.products && !force) return Promise.resolve();
-  return A.bootstrap().then(r => { S.products = r.products; S.settings = r.settings; S.couriers = r.couriers; S.ads = r.ads; indexData(); renderAnnc(); renderFooter(); updateFab(); renderFloatAd(); });
+  return A.bootstrap().then(r => { S.products = r.products; S.settings = r.settings; S.couriers = r.couriers; S.ads = r.ads; S.banks = r.banks || []; indexData(); renderAnnc(); renderFooter(); updateFab(); renderFloatAd(); });
 }
 function withData(fn, force) {
   loading();
@@ -162,9 +183,10 @@ function videoHtml(u) {
   if (m) return `<iframe src="https://drive.google.com/file/d/${m[1]}/preview" title="Video" loading="lazy" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
   return `<video src="${esc(u)}" controls muted playsinline preload="metadata"></video>`;
 }
+const adLink = l => { const m = String(l || "").match(/^#\/produk\/([^?]+)$/); return (m && !(S.products || []).some(p => p.id === decodeURIComponent(m[1]))) ? "#/produk" : String(l || ""); };
 function adHtml(a) {
   const ext = /^https:/.test(a.tautan || ""), lbl = `<small class="adlabel">${a.promo ? t("ad.promo") : t("ad.label")}</small>`;
-  const btn = a.tautan && a.tombol ? `<a class="btn sm" href="${esc(a.tautan)}" ${ext ? 'target="_blank" rel="noopener"' : ""}>${esc(pick(a, "tombol"))}</a>` : "";
+  const btn = a.tautan && a.tombol ? `<a class="btn sm" href="${esc(adLink(a.tautan))}" ${ext ? 'target="_blank" rel="noopener"' : ""}>${esc(pick(a, "tombol"))}</a>` : "";
   const txt = `<div class="adtxt">${lbl}<h3>${esc(pick(a, "judul"))}</h3>${a.teks ? `<p>${esc(pick(a, "teks"))}</p>` : ""}${btn}</div>`;
   if (a.tipe === "video" && a.video) return `<div class="ad video"><div class="adv">${videoHtml(a.video)}</div>${txt}</div>`;
   if (a.tipe === "info") return `<div class="ad info">${txt}</div>`;
@@ -431,17 +453,26 @@ function stepSummary(c) {
   if (S.co.metode === "COD" && codOff) S.co.metode = "Transfer Bank";
   const pay = (v, k, offMsg) => `<label class="pay ${offMsg ? "dis" : ""}"><input type="radio" name="pay" value="${v}" ${S.co.metode === v ? "checked" : ""} ${offMsg ? "disabled" : ""}><span><b>${t(k)}</b><br><span class="muted">${offMsg || t(k + ".d")}</span></span></label>`;
   show(`<section class="section"><h1>Checkout</h1>${stepsBar(3)}<div class="layout2"><div>
-    <div class="card" style="margin-bottom:16px"><h2>${t("co.shipto")}</h2><p style="margin:0"><b>${esc(f.nama)}</b> - ${esc(f.wa)}<br>${esc(f.alamat)}, ${esc(f.kota)}<br><span class="muted">${t("co.courier")}: ${esc(kr.nama)}</span>${f.catatan ? `<br><span class="muted">${t("co.note.s")}: ${esc(f.catatan)}</span>` : ""}</p><button class="link" id="edit">${t("co.edit")}</button></div>
-    <div class="card"><h2>${t("pay.title")}</h2><p class="muted">${t("pay.manual")}</p>${pay("Transfer Bank", "pay.bank")}${pay("QRIS", "pay.qris", qrisOn ? "" : t("pay.qris.off"))}${pay("COD", "pay.cod", codOff)}${pay("Konfirmasi via WhatsApp", "pay.wa")}</div></div>
+    <div class="card" style="margin-bottom:16px"><h2>${t("co.shipto")}</h2><p style="margin:0"><b>${esc(f.nama)}</b> - ${esc(f.wa)}<br>${esc(f.alamat)}, ${esc(f.kota)}<br><span class="muted">${t("co.courier")}: ${esc(kr.nama)}${kr.estimasi ? " (" + esc(est(kr.estimasi)) + ")" : ""}</span>${f.catatan ? `<br><span class="muted">${t("co.note.s")}: ${esc(f.catatan)}</span>` : ""}</p><button class="link" id="edit">${t("co.edit")}</button></div>
+    <div class="card"><h2>${t("pay.title")}</h2><p class="muted">${t("pay.manual")}</p>${pay("Transfer Bank", "pay.bank")}<div id="bankBox"></div>${pay("QRIS", "pay.qris", qrisOn ? "" : t("pay.qris.off"))}${pay("COD", "pay.cod", codOff)}${pay("Konfirmasi via WhatsApp", "pay.wa")}</div></div>
     <aside class="card sum"><h2>${t("sum.order")}</h2>${c.lines.map(l => `<div><span>${esc(pn(l.r.p))}<br><span class="muted">${esc(cn(l.r.v.warna))}, ${esc(l.r.v.ukuran)} x ${l.it.qty}</span></span><span>${rp(l.r.p.harga * l.it.qty)}</span></div>`).join("")}
       <div><span>${t("sum.subtotal")}</span><span>${rp(c.sub)}</span></div><div><span>${t("sum.ship")} (${esc(kr.nama)})</span><span>${ong ? rp(ong) : t("sum.free")}</span></div><div class="tot"><span>${t("sum.total")}</span><span>${rp(tot)}</span></div>
-      ${freeMin() > 0 && c.sub < freeMin() ? `<p class="notice">${t("cart.free.more", { n: rp(freeMin() - c.sub) })}</p>` : ""}<p class="muted">${t("sum.server")}</p><div id="coMsg"></div>
+      ${etaLine({ est_min: kr.est_min, est_max: kr.est_max, hari_proses: Number(S.settings.hari_proses) || 0, dibuat: "", status: "Menunggu pembayaran" })}${freeMin() > 0 && c.sub < freeMin() ? `<p class="notice">${t("cart.free.more", { n: rp(freeMin() - c.sub) })}</p>` : ""}<p class="muted">${t("sum.server")}</p><div id="coMsg"></div>
       <div style="display:grid;gap:10px"><button class="btn" id="place" data-loading="${esc(t("co.placing"))}">${t("co.place")}</button><a class="btn ghost" href="#/keranjang">${t("co.editcart")}</a></div></aside></div></section>`);
   $("#edit").onclick = () => { S.co.step = 2; vCheckout(); };
-  $$("input[name=pay]").forEach(r => { r.onchange = () => { S.co.metode = r.value; }; });
+  const paintBanks = () => {
+    const box = $("#bankBox"); if (!box) return;
+    if (S.co.metode !== "Transfer Bank" || !S.banks.length) { box.innerHTML = ""; return; }
+    if (S.co.bank && !S.banks.some(b => b.id === S.co.bank)) S.co.bank = "";
+    box.innerHTML = `<div class="banks" role="radiogroup" aria-label="${esc(t("bank.title"))}"><p class="muted" style="margin:0 0 6px"><b>${t("bank.title")}</b></p>${S.banks.map(b => `<label class="bankopt"><input type="radio" name="bank" value="${esc(b.id)}" ${S.co.bank === b.id ? "checked" : ""}><span>${esc(b.nama)}</span></label>`).join("")}<div class="err" id="bankErr"></div></div>`;
+    $$("input[name=bank]").forEach(r => { r.onchange = () => { S.co.bank = r.value; $("#bankErr").textContent = ""; }; });
+  };
+  $$("input[name=pay]").forEach(r => { r.onchange = () => { S.co.metode = r.value; paintBanks(); }; });
+  paintBanks();
   $("#place").onclick = () => {
+    if (S.co.metode === "Transfer Bank" && S.banks.length && !S.co.bank) { $("#bankErr").textContent = t("bank.v"); $("#bankBox").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
     S.co.key = S.co.key || A.newKey(); // kunci sama dipakai ulang saat coba lagi, jadi tidak membuat pesanan ganda
-    const body = { nama: f.nama, whatsapp: f.wa, alamat: f.alamat, kota: f.kota, catatan: f.catatan, kurir: f.kurir, metode_bayar: S.co.metode, client_key: S.co.key, simpan_alamat: !!(S.cust && S.co.save !== false), items: c.lines.map(l => ({ variant_id: l.it.vid, jumlah: l.it.qty })) };
+    const body = { nama: f.nama, whatsapp: f.wa, alamat: f.alamat, kota: f.kota, catatan: f.catatan, kurir: f.kurir, metode_bayar: S.co.metode, bank: S.co.metode === "Transfer Bank" ? (S.co.bank || "") : "", client_key: S.co.key, simpan_alamat: !!(S.cust && S.co.save !== false), items: c.lines.map(l => ({ variant_id: l.it.vid, jumlah: l.it.qty })) };
     A.busy($("#place"), () => A.createOrder(body)).then(res => {
       if (!res) return;
       if (S.cust && S.co.save !== false) { S.cust.alamat = f.alamat; S.cust.kota = f.kota; }
@@ -455,6 +486,10 @@ function stepSummary(c) {
     });
   };
 }
+function bankBox(o) {
+  if (!o.bank) return `<div class="notice"><b>${t("done.bank")}</b><br>${esc(o.info_transfer || t("done.bank.none"))}<br>${t("done.bank.note")}</div>`;
+  return `<div class="notice"><b>${t("done.bank.to", { bank: esc(o.bank.nama) })}</b><p style="margin:6px 0 2px">${t("done.bank.no")}: <b class="acc">${esc(o.bank.rek)}</b> <button type="button" class="btn sm ghost" data-copy="${esc(o.bank.rek)}">${t("done.bank.copy")}</button></p><p style="margin:0">${t("done.bank.an")}: <b>${esc(o.bank.atas_nama)}</b></p><p>${t("done.bank.amount", { total: rp(o.total) })}</p><p class="muted" style="margin:0">${t("done.bank.note")}</p></div>`;
+}
 function itemsTable(o) { return `<div class="tablewrap"><table><thead><tr><th>${t("tb.product")}</th><th>${t("tb.qty")}</th><th>${t("tb.subtotal")}</th></tr></thead><tbody>${o.items.map(i => `<tr><td>${esc(pname(i.product_id, i.nama))}<br><span class="muted">${esc(cn(i.warna))}, ${esc(i.ukuran)}</span></td><td>${i.jumlah}</td><td>${rp(i.subtotal)}</td></tr>`).join("")}</tbody></table></div>`; }
 function stepDone() {
   const o = S.co.done;
@@ -462,13 +497,13 @@ function stepDone() {
   const payBox = o.metode_bayar === "QRIS"
     ? `<div class="notice"><b>${t("done.qris")}</b><p>${t("done.qris.amount", { total: rp(o.total) })}</p>${o.qris ? `<img class="qris" src="${esc(imgSrc(o.qris))}" alt="QRIS" data-ph="${esc(t("done.qris.err"))}">` : ""}<p class="muted" style="margin:0">${t("done.qris.note")}</p></div>`
     : o.metode_bayar === "COD" ? `<div class="notice"><b>${t("done.cod")}</b><p>${t("done.cod.amount", { total: rp(o.total) })}</p><p class="muted" style="margin:0">${t("done.cod.note")}</p></div>`
-    : o.metode_bayar === "Transfer Bank" ? `<div class="notice"><b>${t("done.bank")}</b><br>${esc(o.info_transfer || t("done.bank.none"))}<br>${t("done.bank.note")}</div>`
+    : o.metode_bayar === "Transfer Bank" ? bankBox(o)
     : `<div class="notice"><b>${t("done.wa")}</b><br>${t("done.wa.note")}</div>`;
   show(`<section class="section"><h1>${t("done.title")}</h1>${stepsBar(4)}<div class="card" style="max-width:680px">
     <p>${t("done.code")}</p><p><span class="code" id="kode">${esc(o.kode)}</span></p><button class="btn sm ghost" id="copy">${t("done.copy")}</button>
     <p style="margin-top:16px">${t("done.status")}: <span class="pill">${esc(st(o.status))}</span></p>${itemsTable(o)}
     <div class="sum"><div><span>${t("sum.subtotal")}</span><span>${rp(o.subtotal)}</span></div><div><span>${t("sum.ship")} (${esc(o.pengiriman)})</span><span>${o.ongkir ? rp(o.ongkir) : t("sum.free")}</span></div><div class="tot"><span>${t("sum.total")}</span><span>${rp(o.total)}</span></div></div>
-    ${payBox}<div style="display:flex;gap:10px;flex-wrap:wrap">${o.metode_bayar === "Transfer Bank" || o.metode_bayar === "QRIS" ? waA(proof, t("done.sendproof"), "btn") : waA(proof, t("done.chat"), "btn")}
+    ${etaLine(o)}${payBox}<div style="display:flex;gap:10px;flex-wrap:wrap">${o.metode_bayar === "Transfer Bank" || o.metode_bayar === "QRIS" ? waA(proof, t("done.sendproof"), "btn") : waA(proof, t("done.chat"), "btn")}
     <a class="btn ghost" href="#/lacak?kode=${encodeURIComponent(o.kode)}">${t("done.track")}</a><a class="btn ghost" href="#/produk">${t("cart.continue")}</a></div></div></section>`);
   $("#copy").onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(o.kode) : Promise.reject()).then(() => toast(t("done.copied"), "ok")).catch(() => toast(t("done.copy.manual") + " " + o.kode)); };
 }
@@ -503,7 +538,7 @@ function returnBox(o) {
 function orderResult(o) {
   const slug = SLUG[o.status] || "x";
   return `<div class="card" style="max-width:680px"><div class="headline ${slug}"><small>${t("tr.order")} ${esc(o.kode)}</small><b>${t("hl." + slug)}</b><span>${t("hl." + slug + ".d")}</span></div>
-    ${timeline(o)}<p>${t("tr.payment")}: <span class="pill">${esc(pst(o.status_bayar))}</span> <span class="pill">${esc(pm(o.metode_bayar))}</span></p><p class="muted">${t("tr.dest")}: ${esc(o.kota)}</p>
+    ${etaLine(o)}${timeline(o)}${o.metode_bayar === "Transfer Bank" && o.bank && o.status_bayar !== "Sudah dibayar" && o.status !== "Dibatalkan" ? bankBox(o) : ""}<p>${t("tr.payment")}: <span class="pill">${esc(pst(o.status_bayar))}</span> <span class="pill">${esc(pm(o.metode_bayar))}</span></p><p class="muted">${t("tr.dest")}: ${esc(o.kota)}</p>
     <div class="tablewrap"><table><thead><tr><th>${t("tb.product")}</th><th>${t("tb.qty")}</th><th>${t("tb.subtotal")}</th><th>${t("tb.review")}</th></tr></thead><tbody>${o.items.map(i => `<tr><td>${esc(pname(i.product_id, i.nama))}<br><span class="muted">${esc(cn(i.warna))}, ${esc(i.ukuran)}</span></td><td>${i.jumlah}</td><td>${rp(i.subtotal)}</td><td>${o.bisa_ulasan ? (i.sudah_ulasan ? `<span class="pill">${t("rv.done")}</span>` : `<button class="btn sm ghost" data-rv="${esc(i.product_id)}" data-n="${esc(pname(i.product_id, i.nama))}">${t("rv.give")}</button>`) : "-"}</td></tr>`).join("")}</tbody></table></div>
     <div class="sum"><div><span>${t("sum.ship")} (${esc(o.pengiriman)})</span><span>${o.ongkir ? rp(o.ongkir) : t("sum.free")}</span></div><div class="tot"><span>${t("sum.total")}</span><span>${rp(o.total)}</span></div></div>
     ${o.bisa_ulasan ? "" : `<p class="muted">${t("rv.later")}</p>`}${returnBox(o)}<div style="margin-top:10px">${waA(t("wa.ask.order", { kode: o.kode }), "&#128172; " + t("wa.order.btn"), "btn sm ghost")}</div><div id="rvBox"></div></div>`;
@@ -581,17 +616,20 @@ function updateAcct() {
   $("#gAcctSub").textContent = S.cust ? t("gate.acct.as", { name: S.cust.nama }) : t("gate.acct.d");
   const bp = $("#btnProfile"); if (bp) bp.classList.toggle("on", !!S.cust);
 }
+const EYE = '<svg class="open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A10 10 0 0112 5c6.5 0 10 7 10 7a17 17 0 01-3.2 4M6.5 6.6A17 17 0 002 12s3.5 7 10 7a10 10 0 0 0 4.4-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+function pwInput(id, ac) { return `<div class="pwwrap"><input id="${id}" type="password" autocomplete="${ac}"><button type="button" class="eye" data-eye="${id}" aria-pressed="false" aria-label="${esc(t("pw.show"))}" title="${esc(t("pw.show"))}">${EYE}</button></div>`; }
+function toggleEye(b) { const i = $("#" + b.dataset.eye), on = i.type === "password"; i.type = on ? "text" : "password"; b.setAttribute("aria-pressed", on); b.classList.toggle("on", on); const l = t(on ? "pw.hide" : "pw.show"); b.setAttribute("aria-label", l); b.title = l; }
 function vAuth() {
   if (S.cust) { location.hash = "#/akun"; return; }
   const forms = {
     in: `<div class="field" id="a-email"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email"><div class="err"></div></div>
-      <div class="field" id="a-pw"><label for="aPw">${t("au.pw")}</label><input id="aPw" type="password" autocomplete="current-password"><div class="err"></div></div>
+      <div class="field" id="a-pw"><label for="aPw">${t("au.pw")}</label>${pwInput("aPw", "current-password")}<div class="err"></div></div>
       <div id="aMsg"></div><button class="btn" id="aGo" data-loading="${esc(t("au.checking"))}">${t("au.signin")}</button>`,
     up: `<div class="field" id="a-nama"><label for="aNama">${t("au.name")}</label><input id="aNama" maxlength="60" autocomplete="name"><div class="err"></div></div>
       <div class="field" id="a-wa"><label for="aWa">${t("co.wa")}</label><input id="aWa" inputmode="tel" placeholder="081234567890" autocomplete="tel"><div class="err"></div></div>
       <div class="field" id="a-email"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email"><div class="err"></div></div>
-      <div class="field" id="a-pw"><label for="aPw">${t("au.pw.new")}</label><input id="aPw" type="password" autocomplete="new-password"><div class="err"></div></div>
-      <div class="field" id="a-pw2"><label for="aPw2">${t("au.pw2")}</label><input id="aPw2" type="password" autocomplete="new-password"><div class="err"></div></div>
+      <div class="field" id="a-pw"><label for="aPw">${t("au.pw.new")}</label>${pwInput("aPw", "new-password")}<div class="err"></div></div>
+      <div class="field" id="a-pw2"><label for="aPw2">${t("au.pw2")}</label>${pwInput("aPw2", "new-password")}<div class="err"></div></div>
       <div id="aMsg"></div><button class="btn" id="aGo" data-loading="${esc(t("au.creating"))}">${t("au.create")}</button>`
   };
   let tab = "in";
@@ -616,6 +654,7 @@ function vAuth() {
     $$("[data-t]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === tab));
     $("#authBox").innerHTML = forms[tab]; $("#aGo").onclick = tab === "in" ? login : register;
     $$("#authBox input").forEach(i => { i.onkeydown = ev => { if (ev.key === "Enter") $("#aGo").click(); }; });
+    $$("[data-eye]").forEach(b => { b.onclick = () => toggleEye(b); });
   }
   $$("[data-t]").forEach(b => { b.onclick = () => { tab = b.dataset.t; paint(); }; });
   paint();
@@ -728,6 +767,8 @@ $("#gAdmin").onclick = () => setMode("admin");
 $("#admShop").onclick = () => { location.hash = "#/"; setMode("shop"); };
 $("#admGate").onclick = () => setMode("gate");
 $("#skip").onclick = () => { (!$("#shop").hidden ? $("#app") : !$("#admin").hidden ? $("#adm") : $("#gGuest")).focus(); };
+$$(".themebtn").forEach(b => { b.onclick = () => applyTheme(curTheme() === "dark" ? "light" : "dark", true); });
+try { const mq = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)"); if (mq && mq.addEventListener) mq.addEventListener("change", e => { let saved = null; try { saved = localStorage.getItem(THEME_KEY); } catch (x) {} if (!saved) applyTheme(e.matches ? "dark" : "light", false); }); } catch (e) {}
 $$(".lang button").forEach(b => { b.onclick = () => setLang(b.dataset.l); });
 window.addEventListener("hashchange", () => { route(); });
 

@@ -131,3 +131,14 @@ Object.assign(window.CS_LANG.en, { "ad.free.short":"Min. spend {min}", "fad.clos
 
 Object.assign(window.CS_LANG.id, { "help.faq":"Pertanyaan umum", "faq.a8":"Lihat bagian <a href=\"#/retur\">Cara Retur</a> di halaman ini untuk langkah lengkapnya." });
 Object.assign(window.CS_LANG.en, { "help.faq":"FAQ", "faq.a8":"See the <a href=\"#/retur\">How to Return an Item</a> section on this page for the full steps." });
+
+Object.assign(window.CS_LANG.id, {
+"theme.to_dark":"Ganti ke mode gelap","theme.to_light":"Ganti ke mode terang","pw.show":"Tampilkan kata sandi","pw.hide":"Sembunyikan kata sandi","copy.ok":"Disalin.",
+"bank.title":"Pilih bank tujuan transfer","bank.v":"Pilih bank tujuan transfer dulu ya.","done.bank.to":"Transfer ke {bank}","done.bank.no":"Nomor rekening","done.bank.an":"Atas nama","done.bank.copy":"Salin nomor rekening","done.bank.amount":"Transfer tepat {total}.",
+"eta.label":"Estimasi tiba","eta.note":"Perkiraan: pesanan diproses {days} hari kerja, lalu ditambah estimasi jasa kirim (tidak menghitung hari Minggu dan hari libur). Bisa berbeda dari kenyataan.","eta.note.ship":"Perkiraan sejak pesanan dikirim, mengikuti estimasi jasa kirim (tidak menghitung hari Minggu dan hari libur). Bisa berbeda dari kenyataan."
+});
+Object.assign(window.CS_LANG.en, {
+"theme.to_dark":"Switch to dark mode","theme.to_light":"Switch to light mode","pw.show":"Show password","pw.hide":"Hide password","copy.ok":"Copied.",
+"bank.title":"Choose the bank to transfer to","bank.v":"Please choose a bank to transfer to.","done.bank.to":"Transfer to {bank}","done.bank.no":"Account number","done.bank.an":"Account name","done.bank.copy":"Copy account number","done.bank.amount":"Transfer exactly {total}.",
+"eta.label":"Estimated arrival","eta.note":"Estimate: the order is processed for {days} business day(s), plus the courier's estimate (Sundays and holidays not counted). It may differ in practice.","eta.note.ship":"Estimated from when the order is shipped, following the courier's estimate (Sundays and holidays not counted). It may differ in practice."
+});
