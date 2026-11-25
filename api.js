@@ -109,6 +109,8 @@
     trackOrder: function (kode, whatsapp) { return post("trackOrder", { kode: kode, whatsapp: whatsapp || "" }, ctok()); },
     submitReview: function (r) { return post("submitReview", r, ctok()); },
     submitReturn: function (r) { return post("submitReturn", r, ctok()); },
+    cancelOrder: function (r) { return post("cancelOrder", r, ctok()); },
+    trackByPhone: function (whatsapp, nama) { return post("trackByPhone", { whatsapp: whatsapp, nama: nama }); },
     track: function (type, ref) { return post("track", { type: type, vid: vid(), ref: ref || "" }); },
     cust: {
       has: function () { return !!ctok(); },

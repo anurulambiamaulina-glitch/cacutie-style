@@ -42,7 +42,7 @@ function applyStatic() {
 /* ---------- Tema terang / gelap ---------- */
 const THEME_KEY = "cs_theme";
 const curTheme = () => document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-function labelTheme() { const l = t(curTheme() === "dark" ? "theme.to_light" : "theme.to_dark"); $$(".themebtn").forEach(b => { b.setAttribute("aria-label", l); b.title = l; }); }
+function labelTheme() { $$("[data-theme-set]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeSet === curTheme())); }
 function applyTheme(th, persist) { document.documentElement.setAttribute("data-theme", th); if (persist) { try { localStorage.setItem(THEME_KEY, th); } catch (e) {} } labelTheme(); }
 function setLang(l) {
   if (!L[l]) return; lang = l; save(LANG_KEY, l); applyStatic(); updateAcct(); renderAnnc(); renderFooter();
@@ -51,8 +51,12 @@ function setLang(l) {
 
 /* ---------- UI dasar ---------- */
 function toast(msg, type) { const el = document.createElement("div"); el.className = "toast " + (type || ""); el.textContent = msg; $("#toast").appendChild(el); setTimeout(() => el.remove(), type === "error" ? 6000 : 3500); }
-function show(html) { app.onclick = null; app.innerHTML = html; app.focus({ preventScroll: true }); window.scrollTo(0, 0); }
-const loading = () => show(`<div class="loading"><div class="spin"></div>${t("loading")}</div>`);
+let noScroll = false;
+function show(html, full) { app.onclick = null; app.innerHTML = full ? html : `<div class="wrap page">${html}</div>`; app.focus({ preventScroll: true }); if (!noScroll) window.scrollTo(0, 0); noScroll = false; }
+const loading = () => show(`<div class="skel" style="height:34px;width:min(320px,60%);margin-bottom:22px"></div><div class="skelgrid">${'<div class="skel"></div>'.repeat(4)}</div>`);
+const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+const backBtn = (href, label) => `<a class="btn ghost backbtn" href="${esc(href)}">${ARROW}${esc(label || t("back"))}</a>`;
+const pageHead = (title, back) => `<div class="pagehead">${back ? backBtn(back.href, back.label) : ""}<h1>${title}</h1></div>`;
 const notice = (msg, type) => `<div class="notice ${type || ""}" role="${type === "error" ? "alert" : "status"}">${esc(msg)}</div>`;
 const addBiz = (d, n) => { const x = new Date(d.getTime()); while (n > 0) { x.setDate(x.getDate() + 1); if (x.getDay() !== 0) n--; } return x; }; // hari Minggu tidak dihitung
 const parseTs = s => { const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : new Date(); };
@@ -112,12 +116,22 @@ function addToCart(vid, qty) { const c = getCart(), it = c.find(x => x.vid === v
 
 /* ---------- Data ---------- */
 function indexData() { S.idx = {}; S.products.forEach(p => p.varian.forEach(v => { S.idx[v.id] = { p, v }; })); }
+const BOOT_KEY = "cs_boot_v1";
+function applyBoot(r) { S.products = r.products; S.settings = r.settings; S.couriers = r.couriers; S.ads = r.ads; S.banks = r.banks || []; indexData(); renderAnnc(); renderFooter(); updateFab(); renderFloatAd(); }
+function fetchBoot() { return A.bootstrap().then(r => { const changed = JSON.stringify(r) !== JSON.stringify(S.raw || null); S.raw = r; save(BOOT_KEY, r); applyBoot(r); return changed; }); }
 function ensureData(force) {
-  if (S.products && !force) return Promise.resolve();
-  return A.bootstrap().then(r => { S.products = r.products; S.settings = r.settings; S.couriers = r.couriers; S.ads = r.ads; S.banks = r.banks || []; indexData(); renderAnnc(); renderFooter(); updateFab(); renderFloatAd(); });
+  if (force) return fetchBoot();
+  if (S.products) return Promise.resolve();
+  const c = load(BOOT_KEY, null);
+  if (c && c.products) { // data tersimpan di perangkat langsung dipakai agar halaman muncul cepat, lalu disegarkan diam-diam
+    S.raw = c; applyBoot(c);
+    fetchBoot().then(changed => { if (changed && !$("#shop").hidden && (hashInfo().parts[0] || "home") === "home") { noScroll = true; route(); } }).catch(() => {});
+    return Promise.resolve();
+  }
+  return fetchBoot();
 }
 function withData(fn, force) {
-  loading();
+  if (!S.products || force) loading();
   ensureData(force).then(fn).catch(err => {
     show(`<div class="empty"><h2>${t("err.load")}</h2><p>${esc(em(err))}</p><button class="btn" id="retry">${t("retry")}</button></div>`);
     $("#retry").onclick = () => route();
@@ -213,7 +227,7 @@ function route() {
     case "home": return withData(vHome);
     case "produk": return parts[1] ? withData(() => vDetail(decodeURIComponent(parts[1]))) : withData(() => vCatalog(qs));
     case "keranjang": return withData(vCart);
-    case "checkout": return withData(vCheckout, true);
+    case "checkout": return withData(vCheckout);
     case "lacak": return withData(() => vTrack(qs.kode || ""));
     case "faq": return withData(() => vInfo(false));
     case "retur": return withData(() => vInfo(true)); // Cara Retur ada di dalam halaman Bantuan
@@ -228,25 +242,34 @@ function vHome() {
   const P = S.products, s = S.settings, m = freeMin();
   const feat = P.filter(p => p.label === "Bestseller").concat(P.filter(p => p.label !== "Bestseller")).slice(0, 4);
   const latest = P.slice().sort((a, b) => String(b.dibuat).localeCompare(String(a.dibuat))).slice(0, 4);
+  const hero = feat.concat(latest).filter((p, i, a) => a.indexOf(p) === i && imgList(p).length).slice(0, 3);
+  const catImg = k => { const p = P.find(x => x.kategori === k && imgList(x).length); return p ? imgSrc(imgList(p)[0]) : ""; };
   const ads = (m > 0 ? [{ promo: true, tipe: "info", judul: t("ad.free.title"), teks: t("ad.free.text", { min: rp(m) }), tautan: "#/produk", tombol: t("hero.cta") }] : []).concat((S.ads || []).filter(a => a.tipe !== "mengambang"));
-  show(`<section class="hero"><div><h1>${esc(s.nama_toko || "Cacutie Style")}</h1>
-    <p style="font-size:1.15rem">${esc(s.slogan || "Your Style, Your Story.")}<br><span class="muted">${t("hero.sub")}</span></p><a class="btn" href="#/produk">${t("hero.cta")}</a></div>
-    <div class="art"><img src="assets/logo.svg" alt="${esc(t("logo.alt"))}"></div></section>
-  ${ads.length ? `<section class="section"><div class="ads">${ads.map(adHtml).join("")}</div></section>` : ""}
-  <section class="section"><h2>${t("home.cats")}</h2><div class="cats"><a class="cat" href="#/produk?kat=Wanita">${t("nav.women")}</a><a class="cat" href="#/produk?kat=Pria">${t("nav.men")}</a><a class="cat" href="#/produk?kat=Aksesori">${t("nav.acc")}</a></div></section>
-  <section class="section"><h2>${t("home.featured")}</h2><div class="grid">${feat.map(pcard).join("")}</div></section>
-  <section class="section"><h2>${t("home.latest")}</h2><div class="grid">${latest.map(pcard).join("")}</div></section>
-  <section class="section"><h2>${t("home.why")}</h2><div class="why">
-    <div class="card"><h3>${t("why.1.t")}</h3><p class="muted">${t("why.1.d")}</p></div>
-    <div class="card"><h3>${t("why.2.t")}</h3><p class="muted">${t("why.2.d")}</p></div>
-    <div class="card"><h3>${t("why.3.t")}</h3><p class="muted">${t("why.3.d")}</p></div></div></section>`);
+  const ic = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const tile = (k, key) => `<a class="cattile" href="#/produk?kat=${k}">${catImg(k) ? `<img src="${esc(catImg(k))}" alt="" loading="lazy" data-ph="Cacutie">` : ""}<div><b>${t(key)}</b><span>${t("home.shopnow")}</span></div></a>`;
+  show(`
+  <section class="hero2"><div class="wrap in"><div><span class="eyebrow">${t("hero.eyebrow")}</span><h1>${esc(s.nama_toko || "Cacutie Style")}</h1>
+    <p class="lead">${esc(s.slogan || "Your Style, Your Story.")} ${t("hero.sub")}</p>
+    <div class="heroact"><a class="btn" href="#/produk">${t("hero.cta")}</a><a class="btn ghost" href="#/produk?kat=Wanita">${t("hero.cta2")}</a></div></div>
+    <div class="collage" aria-hidden="true"><span class="blob"></span>${hero.map((p, i) => `<div class="cc c${i + 1}"><img src="${esc(imgSrc(imgList(p)[0]))}" alt="" data-ph="Cacutie"></div>`).join("")}</div></div></section>
+  <div class="wrap">
+    <div class="trust">
+      <div>${ic('<path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/>')}<span><b>${t("trust.1.t")}</b>${t("trust.1.d")}</span></div>
+      <div>${ic('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>')}<span><b>${t("trust.2.t")}</b>${t("trust.2.d")}</span></div>
+      <div>${ic('<path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10A8 8 0 006.3 6.3L4 10M4 14a8 8 0 0013.7 3.7L20 14"/>')}<span><b>${t("trust.3.t")}</b>${t("trust.3.d")}</span></div>
+      <div>${ic('<path d="M21 12a8 8 0 01-11.9 7L4 20l1.1-4A8 8 0 1121 12z"/>')}<span><b>${t("trust.4.t")}</b>${t("trust.4.d")}</span></div></div>
+    ${ads.length ? `<section class="section"><div class="ads">${ads.map(adHtml).join("")}</div></section>` : ""}
+    <section class="section"><div class="sechead"><h2>${t("home.cats")}</h2></div><div class="cats">${tile("Wanita", "nav.women")}${tile("Pria", "nav.men")}${tile("Aksesori", "nav.acc")}</div></section>
+    <section class="section"><div class="sechead"><h2>${t("home.featured")}</h2><a href="#/produk">${t("home.all")} &rarr;</a></div><div class="grid">${feat.map(pcard).join("")}</div></section>
+    <section class="section"><div class="sechead"><h2>${t("home.latest")}</h2><a href="#/produk">${t("home.all")} &rarr;</a></div><div class="grid">${latest.map(pcard).join("")}</div></section>
+  </div>`, true);
 }
 
 /* ---------- Katalog ---------- */
 function vCatalog(qs) {
   const f = { q: qs.q || "", kat: qs.kat || "", urut: qs.urut || "", harga: qs.harga || "", stok: qs.stok === "1" };
   const o = (v, label, cur) => `<option value="${v}" ${cur === v ? "selected" : ""}>${label}</option>`;
-  show(`<section class="section"><h1 id="ctitle">${f.kat ? t("cat." + f.kat) : t("cat.title")}</h1><div class="filters">
+  show(`<section class="section">${pageHead(`<span id="ctitle">${f.kat ? t("cat." + f.kat) : t("cat.title")}</span>`, { href: "#/" })}<div class="filters">
     <div><label for="fq">${t("cat.search")}</label><input id="fq" type="search" value="${esc(f.q)}" placeholder="${esc(t("cat.search.ph"))}"></div>
     <div><label for="fkat">${t("cat.category")}</label><select id="fkat">${o("", t("cat.all"), f.kat)}${o("Wanita", t("nav.women"), f.kat)}${o("Pria", t("nav.men"), f.kat)}${o("Aksesori", t("nav.acc"), f.kat)}</select></div>
     <div><label for="fharga">${t("cat.price")}</label><select id="fharga">${o("", t("cat.price.all"), f.harga)}${o("0-100000", t("cat.price.1"), f.harga)}${o("100000-200000", t("cat.price.2"), f.harga)}${o("200000-", t("cat.price.3"), f.harga)}</select></div>
@@ -268,7 +291,7 @@ function vCatalog(qs) {
     $("#grid").innerHTML = l.length ? `<div class="grid">${l.map(pcard).join("")}</div>` : `<div class="empty"><h2>${t("cat.none")}</h2><p>${t("cat.none.d")}</p><button class="btn ghost" id="reset">${t("cat.reset")}</button></div>`;
     const r = $("#reset"); if (r) r.onclick = () => { $("#fq").value = ""; $("#fkat").value = ""; $("#fharga").value = ""; $("#furut").value = ""; $("#fstok").checked = false; paint(); };
     const q = []; if (f.q) q.push("q=" + encodeURIComponent(f.q)); if (f.kat) q.push("kat=" + encodeURIComponent(f.kat)); if (f.harga) q.push("harga=" + f.harga); if (f.urut) q.push("urut=" + f.urut); if (f.stok) q.push("stok=1");
-    history.replaceState(null, "", "#/produk" + (q.length ? "?" + q.join("&") : "")); markNav();
+    history.replaceState(null, "", "#/produk" + (q.length ? "?" + q.join("&") : "")); S.lastCat = location.hash; markNav();
   }
   ["fq", "fkat", "fharga", "furut", "fstok"].forEach(id => $("#" + id).addEventListener(id === "fq" ? "input" : "change", paint));
   paint();
@@ -284,7 +307,7 @@ function vDetail(id) {
   const sizeInfo = {}, sizeList = [];
   String((lang === "en" && p.ukuran_info_en) ? p.ukuran_info_en : (p.ukuran_info || "")).split("\n").forEach(l => { const m = l.match(/^([^:]{1,20}):\s*(.+)$/); if (m) { sizeInfo[m[1].trim().toLowerCase()] = m[2].trim(); sizeList.push([m[1].trim(), m[2].trim()]); } });
   const askText = t("wa.ask.product", { name: pn(p), sku: p.sku });
-  show(`<section class="section"><p><a href="#/produk">&larr; ${t("d.back")}</a></p><div class="detail">
+  show(`<section class="section"><div class="pagehead">${backBtn(S.lastCat || "#/produk", t("d.back"))}</div><div class="detail">
     <div>${galleryHtml(imgList(p), pn(p))}</div>
     <div><h1 style="font-size:1.8rem">${esc(pn(p))}</h1><p class="muted">SKU: ${esc(p.sku)} - ${esc(t("cat." + p.kategori))}</p>
       <p class="price" style="font-size:1.5rem">${rp(p.harga)}</p><p>${esc(pdsc(p))}</p><div id="opts"></div>
@@ -357,7 +380,7 @@ function reconcile() { // cocokkan keranjang dengan data terbaru dari database
 function vCart() {
   const c = reconcile(), m = freeMin();
   if (!c.lines.length) return show(`<div class="empty"><h2>${t("cart.empty")}</h2><p>${t("cart.empty.d")}</p><a class="btn" href="#/produk">${t("cart.start")}</a></div>`);
-  show(`<section class="section"><h1>${t("cart.title")}</h1>${c.msgs.map(x => notice(x, "warn")).join("")}<div class="layout2"><div class="card">
+  show(`<section class="section">${pageHead(t("cart.title"), { href: S.lastCat || "#/produk" })}${c.msgs.map(x => notice(x, "warn")).join("")}<div class="layout2"><div class="card">
     ${c.lines.map(l => l.r ? `<div class="cartitem"><a class="pimg" href="#/produk/${encodeURIComponent(l.r.p.id)}">${imgHtml(l.r.p)}</a><div>
       <b>${esc(pn(l.r.p))}</b><div class="muted">SKU ${esc(l.r.p.sku)} - ${esc(cn(l.r.v.warna))}, ${esc(l.r.v.ukuran)}</div><div>${rp(l.r.p.harga)} ${t("cart.each")}</div>
       ${l.issue ? notice(l.issue, "error") : ""}<div class="line"><div class="qty" role="group" aria-label="${esc(t("d.qty"))}"><button data-dec="${esc(l.it.vid)}" aria-label="-">-</button><span>${l.it.qty}</span><button data-inc="${esc(l.it.vid)}" aria-label="+">+</button></div>
@@ -417,23 +440,32 @@ function vCheckout() {
   const c = reconcile();
   if (!c.lines.length) return show(`<div class="empty"><h2>${t("co.empty")}</h2><p>${t("co.empty.d")}</p><a class="btn" href="#/produk">${t("cart.start")}</a></div>`);
   if (c.blocked || c.msgs.length) { toast(t(c.blocked ? "co.blocked" : "co.changed"), "error"); location.hash = "#/keranjang"; return; }
-  S.co.step === 3 ? stepSummary(c) : stepForm();
+  S.co.step === 3 ? stepSummary(c) : stepForm(c);
 }
-function stepForm() {
+function sideSummary(c, kr) {
+  const ong = kr ? shipFor(c.sub, kr) : 0, hp = Number(S.settings.hari_proses) || 0;
+  return `<h2>${t("sum.order")}</h2>${c.lines.map(l => `<div><span>${esc(pn(l.r.p))}<br><span class="muted">${esc(cn(l.r.v.warna))}, ${esc(l.r.v.ukuran)} x ${l.it.qty}</span></span><span>${rp(l.r.p.harga * l.it.qty)}</span></div>`).join("")}
+    <div><span>${t("sum.subtotal")}</span><span>${rp(c.sub)}</span></div><div><span>${t("sum.ship")}${kr ? " (" + esc(kr.nama) + ")" : ""}</span><span>${kr ? (ong ? rp(ong) : t("sum.free")) : t("cart.ship.later")}</span></div>
+    <div class="tot"><span>${t("sum.total")}</span><span>${rp(c.sub + ong)}</span></div>
+    ${kr ? etaLine({ est_min: kr.est_min, est_max: kr.est_max, hari_proses: hp, dibuat: "", status: "Menunggu pembayaran" }) : ""}${freeMin() > 0 && c.sub < freeMin() ? `<p class="notice" style="margin:10px 0 0">${t("cart.free.more", { n: rp(freeMin() - c.sub) })}</p>` : ""}`;
+}
+function stepForm(c) {
   const saved = S.cust && S.cust.alamat ? { alamat: S.cust.alamat, kota: S.cust.kota } : {};
   const f = Object.assign({ nama: S.cust ? S.cust.nama : "", wa: S.cust ? S.cust.whatsapp : "" }, saved, S.co.form);
   const fromAcct = !!(saved.alamat && !S.co.form.alamat);
-  show(`<section class="section"><h1>Checkout</h1>${stepsBar(2)}<div class="card" style="max-width:640px"><h2>${t("co.ship.title")}</h2>
+  show(`<section class="section">${pageHead("Checkout", { href: "#/keranjang", label: t("co.back") })}${stepsBar(2)}<div class="checkout"><div class="card"><h2>${t("co.ship.title")}</h2>
     <p class="muted">${S.cust ? t("co.acct", { email: esc(S.cust.email) }) : t("co.guest_h")}</p>${fromAcct ? `<p class="notice ok">${t("co.saved")}</p>` : ""}
-    <div class="field" id="f-nama"><label for="nama">${t("co.name")}</label><input id="nama" maxlength="60" autocomplete="name" value="${esc(f.nama || "")}"><div class="err"></div></div>
-    <div class="field" id="f-wa"><label for="wa">${t("co.wa")}</label><input id="wa" inputmode="tel" autocomplete="tel" placeholder="081234567890" value="${esc(f.wa || "")}"><div class="err"></div></div>
+    <div class="row two"><div class="field" id="f-nama"><label for="nama">${t("co.name")}</label><input id="nama" maxlength="60" autocomplete="name" value="${esc(f.nama || "")}"><div class="err"></div></div>
+    <div class="field" id="f-wa"><label for="wa">${t("co.wa")}</label><input id="wa" inputmode="tel" autocomplete="tel" placeholder="081234567890" value="${esc(f.wa || "")}"><div class="err"></div></div></div>
     ${locUi()}
     <div class="field" id="f-alamat"><label for="alamat">${t("co.addr")}</label><textarea id="alamat" maxlength="300" autocomplete="street-address">${esc(f.alamat || "")}</textarea><div class="err"></div></div>
-    <div class="field" id="f-kota"><label for="kota">${t("co.city")}</label><input id="kota" maxlength="60" value="${esc(f.kota || "")}"><div class="err"></div></div>
-    <div class="field"><label for="cat">${t("co.note")}</label><textarea id="cat" maxlength="200">${esc(f.catatan || "")}</textarea></div>
-    <div class="field" id="f-kurir"><label for="kirim">${t("co.courier")}</label><select id="kirim"><option value="">${t("co.courier.pick")}</option>${(S.couriers || []).map(k => `<option value="${esc(k.id)}" ${f.kurir === k.id ? "selected" : ""}>${esc(k.nama)} - ${rp(k.tarif)}${k.estimasi ? " (" + esc(est(k.estimasi)) + ")" : ""}</option>`).join("")}</select><div class="err"></div></div>
+    <div class="row two"><div class="field" id="f-kota"><label for="kota">${t("co.city")}</label><input id="kota" maxlength="60" value="${esc(f.kota || "")}"><div class="err"></div></div>
+    <div class="field" id="f-kurir"><label for="kirim">${t("co.courier")}</label><select id="kirim"><option value="">${t("co.courier.pick")}</option>${(S.couriers || []).map(k => `<option value="${esc(k.id)}" ${f.kurir === k.id ? "selected" : ""}>${esc(k.nama)} - ${rp(k.tarif)}${k.estimasi ? " (" + esc(est(k.estimasi)) + ")" : ""}</option>`).join("")}</select><div class="err"></div></div></div>
+    <div class="field"><label for="cat">${t("co.note")}</label><textarea id="cat" maxlength="200" style="min-height:70px">${esc(f.catatan || "")}</textarea></div>
     ${S.cust ? `<label class="chk"><input type="checkbox" id="saveAddr" ${S.co.save !== false ? "checked" : ""}> ${t("co.save")}</label>` : ""}
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"><a class="btn ghost" href="#/keranjang">${t("co.back")}</a><button class="btn" id="next">${t("co.next")}</button></div></div></section>`);
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;justify-content:space-between"><a class="btn ghost backbtn" href="#/keranjang">${ARROW}${t("co.back")}</a><button class="btn" id="next">${t("co.next")}</button></div></div>
+    <aside class="card sumcard sum" id="sideSum">${sideSummary(c, courier(f.kurir))}</aside></div></section>`);
+  $("#kirim").onchange = () => { $("#sideSum").innerHTML = sideSummary(c, courier($("#kirim").value)); };
   bindLocate("#locBtn", "#locMsg", r => { if (r.kota) $("#kota").value = r.kota; if (!$("#alamat").value.trim() && r.alamat) $("#alamat").value = r.alamat; });
   $("#next").onclick = () => {
     const v = { nama: $("#nama").value.trim(), wa: $("#wa").value.trim(), alamat: $("#alamat").value.trim(), kota: $("#kota").value.trim(), catatan: $("#cat").value.trim(), kurir: $("#kirim").value };
@@ -452,19 +484,20 @@ function stepSummary(c) {
   if (S.co.metode === "QRIS" && !qrisOn) S.co.metode = "Transfer Bank";
   if (S.co.metode === "COD" && codOff) S.co.metode = "Transfer Bank";
   const pay = (v, k, offMsg) => `<label class="pay ${offMsg ? "dis" : ""}"><input type="radio" name="pay" value="${v}" ${S.co.metode === v ? "checked" : ""} ${offMsg ? "disabled" : ""}><span><b>${t(k)}</b><br><span class="muted">${offMsg || t(k + ".d")}</span></span></label>`;
-  show(`<section class="section"><h1>Checkout</h1>${stepsBar(3)}<div class="layout2"><div>
+  show(`<section class="section">${pageHead("Checkout")}${stepsBar(3)}<div class="checkout"><div>
     <div class="card" style="margin-bottom:16px"><h2>${t("co.shipto")}</h2><p style="margin:0"><b>${esc(f.nama)}</b> - ${esc(f.wa)}<br>${esc(f.alamat)}, ${esc(f.kota)}<br><span class="muted">${t("co.courier")}: ${esc(kr.nama)}${kr.estimasi ? " (" + esc(est(kr.estimasi)) + ")" : ""}</span>${f.catatan ? `<br><span class="muted">${t("co.note.s")}: ${esc(f.catatan)}</span>` : ""}</p><button class="link" id="edit">${t("co.edit")}</button></div>
-    <div class="card"><h2>${t("pay.title")}</h2><p class="muted">${t("pay.manual")}</p>${pay("Transfer Bank", "pay.bank")}<div id="bankBox"></div>${pay("QRIS", "pay.qris", qrisOn ? "" : t("pay.qris.off"))}${pay("COD", "pay.cod", codOff)}${pay("Konfirmasi via WhatsApp", "pay.wa")}</div></div>
-    <aside class="card sum"><h2>${t("sum.order")}</h2>${c.lines.map(l => `<div><span>${esc(pn(l.r.p))}<br><span class="muted">${esc(cn(l.r.v.warna))}, ${esc(l.r.v.ukuran)} x ${l.it.qty}</span></span><span>${rp(l.r.p.harga * l.it.qty)}</span></div>`).join("")}
+    <div class="card"><h2>${t("pay.title")}</h2><p class="muted">${t("pay.manual")}</p>${pay("Transfer Bank", "pay.bank")}<div id="bankBox"></div>${pay("QRIS", "pay.qris", qrisOn ? "" : t("pay.qris.off"))}${pay("COD", "pay.cod", codOff)}${pay("Konfirmasi via WhatsApp", "pay.wa")}</div><div style="margin-top:14px"><button type="button" class="btn ghost backbtn" id="backStep">${ARROW}${t("back")}</button></div></div>
+    <aside class="card sumcard sum"><h2>${t("sum.order")}</h2>${c.lines.map(l => `<div><span>${esc(pn(l.r.p))}<br><span class="muted">${esc(cn(l.r.v.warna))}, ${esc(l.r.v.ukuran)} x ${l.it.qty}</span></span><span>${rp(l.r.p.harga * l.it.qty)}</span></div>`).join("")}
       <div><span>${t("sum.subtotal")}</span><span>${rp(c.sub)}</span></div><div><span>${t("sum.ship")} (${esc(kr.nama)})</span><span>${ong ? rp(ong) : t("sum.free")}</span></div><div class="tot"><span>${t("sum.total")}</span><span>${rp(tot)}</span></div>
       ${etaLine({ est_min: kr.est_min, est_max: kr.est_max, hari_proses: Number(S.settings.hari_proses) || 0, dibuat: "", status: "Menunggu pembayaran" })}${freeMin() > 0 && c.sub < freeMin() ? `<p class="notice">${t("cart.free.more", { n: rp(freeMin() - c.sub) })}</p>` : ""}<p class="muted">${t("sum.server")}</p><div id="coMsg"></div>
       <div style="display:grid;gap:10px"><button class="btn" id="place" data-loading="${esc(t("co.placing"))}">${t("co.place")}</button><a class="btn ghost" href="#/keranjang">${t("co.editcart")}</a></div></aside></div></section>`);
   $("#edit").onclick = () => { S.co.step = 2; vCheckout(); };
+  $("#backStep").onclick = () => { S.co.step = 2; vCheckout(); };
   const paintBanks = () => {
     const box = $("#bankBox"); if (!box) return;
     if (S.co.metode !== "Transfer Bank" || !S.banks.length) { box.innerHTML = ""; return; }
     if (S.co.bank && !S.banks.some(b => b.id === S.co.bank)) S.co.bank = "";
-    box.innerHTML = `<div class="banks" role="radiogroup" aria-label="${esc(t("bank.title"))}"><p class="muted" style="margin:0 0 6px"><b>${t("bank.title")}</b></p>${S.banks.map(b => `<label class="bankopt"><input type="radio" name="bank" value="${esc(b.id)}" ${S.co.bank === b.id ? "checked" : ""}><span>${esc(b.nama)}</span></label>`).join("")}<div class="err" id="bankErr"></div></div>`;
+    box.innerHTML = `<div class="banktitle">${t("bank.title")}</div><div class="bankchips" role="radiogroup" aria-label="${esc(t("bank.title"))}">${S.banks.map(b => `<label class="bankchip"><input type="radio" name="bank" value="${esc(b.id)}" ${S.co.bank === b.id ? "checked" : ""}><span>${esc(b.nama)}</span></label>`).join("")}</div><div class="bankerr" id="bankErr"></div>`;
     $$("input[name=bank]").forEach(r => { r.onchange = () => { S.co.bank = r.value; $("#bankErr").textContent = ""; }; });
   };
   $$("input[name=pay]").forEach(r => { r.onchange = () => { S.co.metode = r.value; paintBanks(); }; });
@@ -477,7 +510,7 @@ function stepSummary(c) {
       if (!res) return;
       if (S.cust && S.co.save !== false) { S.cust.alamat = f.alamat; S.cust.kota = f.kota; }
       setCart([]); S.co.done = res; S.co.step = 2; S.co.key = null; S.co.form = {};
-      const o = load(ORD_KEY, []); o.unshift({ kode: res.kode, t: Date.now() }); save(ORD_KEY, o.slice(0, 10));
+      const o = load(ORD_KEY, []); o.unshift({ kode: res.kode, wa: f.wa, t: Date.now() }); save(ORD_KEY, o.slice(0, 10));
       stepDone();
     }).catch(e => {
       let m = em(e); if (e.code === "TIMEOUT") m += " " + t("co.timeout");
@@ -499,7 +532,7 @@ function stepDone() {
     : o.metode_bayar === "COD" ? `<div class="notice"><b>${t("done.cod")}</b><p>${t("done.cod.amount", { total: rp(o.total) })}</p><p class="muted" style="margin:0">${t("done.cod.note")}</p></div>`
     : o.metode_bayar === "Transfer Bank" ? bankBox(o)
     : `<div class="notice"><b>${t("done.wa")}</b><br>${t("done.wa.note")}</div>`;
-  show(`<section class="section"><h1>${t("done.title")}</h1>${stepsBar(4)}<div class="card" style="max-width:680px">
+  show(`<section class="section narrow">${pageHead(t("done.title"))}${stepsBar(4)}<div class="card">
     <p>${t("done.code")}</p><p><span class="code" id="kode">${esc(o.kode)}</span></p><button class="btn sm ghost" id="copy">${t("done.copy")}</button>
     <p style="margin-top:16px">${t("done.status")}: <span class="pill">${esc(st(o.status))}</span></p>${itemsTable(o)}
     <div class="sum"><div><span>${t("sum.subtotal")}</span><span>${rp(o.subtotal)}</span></div><div><span>${t("sum.ship")} (${esc(o.pengiriman)})</span><span>${o.ongkir ? rp(o.ongkir) : t("sum.free")}</span></div><div class="tot"><span>${t("sum.total")}</span><span>${rp(o.total)}</span></div></div>
@@ -535,17 +568,28 @@ function returnBox(o) {
   return `${list.length ? `<h3>${t("rt.requests")}</h3><ul class="rtlist">${list.map(r => `<li><b>${esc(pname(r.product_id, r.nama))}</b> <span class="pill">${t("rt.st." + (RETUR_ST[r.status] || "req"))}</span>${r.catatan_admin ? `<div class="muted">${t("rt.admin")}: ${esc(r.catatan_admin)}</div>` : ""}</li>`).join("")}</ul>` : ""}
     ${open ? `<div style="margin-top:8px"><button class="btn sm ghost" data-ret="1">${t("rt.give")}</button> <a class="link" href="#/retur">${t("nav.return")}</a></div><div id="rtBox"></div>` : (o.status === "Selesai" && !list.length && o.bisa_retur === false ? `<p class="muted">${t("rt.expired", { days: o.retur_hari || 3 })}</p>` : "")}`;
 }
+function cancelBox(o) {
+  if (!o.bisa_batal) return "";
+  return `<div class="notice warn" style="margin-top:14px"><b>${t("cx.title")}</b><br>${t("cx.info", { n: o.batal_sisa, m: o.batal_menit })}<div style="margin-top:10px"><button class="btn sm danger" type="button" data-cancel="1">${t("cx.btn")}</button></div><div id="cxBox"></div></div>`;
+}
 function orderResult(o) {
   const slug = SLUG[o.status] || "x";
-  return `<div class="card" style="max-width:680px"><div class="headline ${slug}"><small>${t("tr.order")} ${esc(o.kode)}</small><b>${t("hl." + slug)}</b><span>${t("hl." + slug + ".d")}</span></div>
+  return `<div class="card"><div class="headline ${slug}"><small>${t("tr.order")} ${esc(o.kode)}</small><b>${t("hl." + slug)}</b><span>${t("hl." + slug + ".d")}</span></div>
     ${etaLine(o)}${timeline(o)}${o.metode_bayar === "Transfer Bank" && o.bank && o.status_bayar !== "Sudah dibayar" && o.status !== "Dibatalkan" ? bankBox(o) : ""}<p>${t("tr.payment")}: <span class="pill">${esc(pst(o.status_bayar))}</span> <span class="pill">${esc(pm(o.metode_bayar))}</span></p><p class="muted">${t("tr.dest")}: ${esc(o.kota)}</p>
     <div class="tablewrap"><table><thead><tr><th>${t("tb.product")}</th><th>${t("tb.qty")}</th><th>${t("tb.subtotal")}</th><th>${t("tb.review")}</th></tr></thead><tbody>${o.items.map(i => `<tr><td>${esc(pname(i.product_id, i.nama))}<br><span class="muted">${esc(cn(i.warna))}, ${esc(i.ukuran)}</span></td><td>${i.jumlah}</td><td>${rp(i.subtotal)}</td><td>${o.bisa_ulasan ? (i.sudah_ulasan ? `<span class="pill">${t("rv.done")}</span>` : `<button class="btn sm ghost" data-rv="${esc(i.product_id)}" data-n="${esc(pname(i.product_id, i.nama))}">${t("rv.give")}</button>`) : "-"}</td></tr>`).join("")}</tbody></table></div>
     <div class="sum"><div><span>${t("sum.ship")} (${esc(o.pengiriman)})</span><span>${o.ongkir ? rp(o.ongkir) : t("sum.free")}</span></div><div class="tot"><span>${t("sum.total")}</span><span>${rp(o.total)}</span></div></div>
-    ${o.bisa_ulasan ? "" : `<p class="muted">${t("rv.later")}</p>`}${returnBox(o)}<div style="margin-top:10px">${waA(t("wa.ask.order", { kode: o.kode }), "&#128172; " + t("wa.order.btn"), "btn sm ghost")}</div><div id="rvBox"></div></div>`;
+    ${o.bisa_ulasan ? "" : `<p class="muted">${t("rv.later")}</p>`}${returnBox(o)}${cancelBox(o)}<div style="margin-top:10px">${waA(t("wa.ask.order", { kode: o.kode }), "&#128172; " + t("wa.order.btn"), "btn sm ghost")}</div><div id="rvBox"></div></div>`;
 }
 // ctx = { kode, wa, o } : tamu memakai kode + WhatsApp, pelanggan yang login cukup kode
 function bindReviews(box, ctx) {
   box.onclick = e => {
+    const cb = e.target.closest("button[data-cancel]");
+    if (cb) {
+      $("#cxBox").innerHTML = `<div style="margin-top:10px"><div class="field"><label for="cxWhy">${t("cx.reason")}</label><textarea id="cxWhy" maxlength="200" style="min-height:70px"></textarea></div><div id="cxMsg"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm danger" id="cxYes" data-loading="${esc(t("cx.sending"))}">${t("cx.yes")}</button><button type="button" class="btn sm ghost" id="cxNo">${t("cx.no")}</button></div></div>`;
+      $("#cxNo").onclick = () => { $("#cxBox").innerHTML = ""; };
+      $("#cxYes").onclick = () => A.busy($("#cxYes"), () => A.cancelOrder({ kode: ctx.kode, whatsapp: ctx.wa || "", alasan: $("#cxWhy").value.trim() })).then(r => { if (!r) return; toast(t("cx.done"), "ok"); if (ctx.reload) ctx.reload(); }).catch(er => { $("#cxMsg").innerHTML = notice(em(er), "error"); });
+      return;
+    }
     const rb = e.target.closest("button[data-ret]");
     if (rb) {
       const o = ctx.o || { items: [], retur: [] }, taken = {}; (o.retur || []).forEach(r => { taken[r.product_id] = true; });
@@ -590,24 +634,49 @@ function bindReviews(box, ctx) {
   };
 }
 function vTrack(prefill) {
-  const recent = load(ORD_KEY, []);
-  show(`<section class="section"><h1>${t("nav.track")}</h1>${S.cust ? `<p class="notice">${t("tr.loggedin_h", { name: esc(S.cust.nama) })}</p>` : ""}
-    <div class="card" style="max-width:560px"><p class="muted">${t("tr.intro")}</p>
-    <div class="field" id="t-kode"><label for="tk">${t("tr.code")}</label><input id="tk" maxlength="30" placeholder="CS260101-AB3XY" value="${esc(prefill)}"><div class="err"></div></div>
-    <div class="field" id="t-wa"><label for="tw">${t("co.wa")}</label><input id="tw" inputmode="tel" placeholder="081234567890" value="${esc(S.cust ? S.cust.whatsapp : "")}"><div class="err"></div></div>
-    ${recent.length ? `<p class="muted">${t("tr.recent")}: ${recent.map(r => `<button class="link" data-k="${esc(r.kode)}">${esc(r.kode)}</button>`).join(", ")}</p>` : ""}
-    <div id="tMsg"></div><button class="btn" id="tgo" data-loading="${esc(t("tr.searching"))}">${t("tr.check")}</button></div><div id="tRes" style="margin-top:20px"></div></section>`);
-  $$("[data-k]").forEach(b => { b.onclick = () => { $("#tk").value = b.dataset.k; $("#tw").focus(); }; });
-  $("#tgo").onclick = () => {
-    const k = $("#tk").value.trim().toUpperCase(), w = $("#tw").value.trim(); let bad = false;
-    const chk = (id, ok, m) => { const el = $("#" + id); el.classList.toggle("bad", !ok); $(".err", el).textContent = ok ? "" : m; if (!ok) bad = true; };
-    chk("t-kode", k.length >= 5, t("v.code")); chk("t-wa", !!normWa(w), t("v.wa"));
-    if (bad) return;
-    $("#tMsg").innerHTML = ""; $("#tRes").innerHTML = "";
-    A.busy($("#tgo"), () => A.trackOrder(k, w)).then(o => { if (!o) return; $("#tRes").innerHTML = orderResult(o); bindReviews($("#tRes"), { kode: k, wa: w, o }); updateFab(t("wa.ask.order", { kode: o.kode })); })
-      .catch(e => { $("#tMsg").innerHTML = notice(em(e), "error"); });
+  const recent = load(ORD_KEY, []), memo = load("cs_lookup", {});
+  const ocard = (o, wa) => `<button type="button" class="ocard" data-k="${esc(o.kode)}" data-wa="${esc(wa || "")}"><span><b>${esc(o.kode)}</b><span class="muted">${esc(String(o.dibuat || "").slice(0, 10))}${o.total ? " - " + rp(o.total) : ""}</span></span><span>${o.status ? `<span class="pill">${esc(st(o.status))}</span>` : `<span class="muted">${t("tr.open")}</span>`}</span></button>`;
+  show(`<section class="section mid">${pageHead(t("nav.track"), { href: "#/" })}<div class="lookup"><div class="card"><h2>${t("tr.byphone")}</h2><p class="muted">${t("tr.byphone.d")}</p>
+      ${S.cust ? `<p class="notice">${t("tr.loggedin_h", { name: esc(S.cust.nama) })}</p>` : ""}
+      <div class="field" id="t-wa"><label for="tw">${t("co.wa")}</label><input id="tw" inputmode="tel" placeholder="081234567890" value="${esc(S.cust ? S.cust.whatsapp : (memo.wa || ""))}"><div class="err"></div></div>
+      <div class="field" id="t-nama"><label for="tn">${t("tr.name")}</label><input id="tn" maxlength="60" autocomplete="name" value="${esc(S.cust ? S.cust.nama : (memo.nama || ""))}"><div class="err"></div></div>
+      <div id="tMsg"></div><button class="btn" id="tgo" data-loading="${esc(t("tr.searching"))}">${t("tr.find")}</button><div id="tList"></div>
+      <details style="margin-top:16px" id="byCode"><summary><b>${t("tr.bycode")}</b></summary><p class="muted" style="margin-top:8px">${t("tr.bycode.d")}</p>
+        <div class="field" id="t-kode"><label for="tk">${t("tr.code")}</label><input id="tk" maxlength="30" placeholder="CS260101-AB3XY" value="${esc(prefill)}"><div class="err"></div></div>
+        <button class="btn ghost" id="tgo2" data-loading="${esc(t("tr.searching"))}">${t("tr.check")}</button></details></div>
+    <div><div id="tRes"></div>${recent.length ? `<div class="card" id="recentBox" style="margin-top:16px"><h3>${t("tr.recent")}</h3><p class="muted" style="margin-top:-4px">${t("tr.recent.d")}</p><div class="olist">${recent.map(r => ocard(r, r.wa)).join("")}</div></div>` : ""}</div></div></section>`);
+  let bad = false;
+  const chk = (id, ok, m) => { const el = $("#" + id); el.classList.toggle("bad", !ok); $(".err", el).textContent = ok ? "" : m; if (!ok) bad = true; };
+  const openOrder = (kode, wa, btn) => {
+    const ctx = { kode, wa };
+    return A.busy(btn || null, () => A.trackOrder(kode, wa)).then(o => {
+      if (!o) return;
+      ctx.o = o; ctx.reload = () => openOrder(kode, wa);
+      $("#tRes").innerHTML = orderResult(o); bindReviews($("#tRes"), ctx); updateFab(t("wa.ask.order", { kode: o.kode }));
+      $("#tRes").scrollIntoView({ behavior: "smooth", block: "start" });
+    }).catch(er => toast(em(er), "error"));
   };
-  if (prefill && S.cust) { /* pelanggan yang login: buka detail dari Akun Saya */ }
+  app.onclick = e => {
+    const b = e.target.closest(".ocard"); if (!b) return;
+    if (!b.dataset.wa) { $("#byCode").open = true; $("#tk").value = b.dataset.k; $("#tw").focus(); toast(t("tr.needwa")); return; }
+    openOrder(b.dataset.k, b.dataset.wa, b);
+  };
+  $("#tgo").onclick = () => {
+    bad = false; const w = $("#tw").value.trim(), n = $("#tn").value.trim();
+    chk("t-wa", !!normWa(w), t("v.wa")); chk("t-nama", n.length >= 2, t("v.name")); if (bad) return;
+    $("#tMsg").innerHTML = ""; $("#tList").innerHTML = "";
+    A.busy($("#tgo"), () => A.trackByPhone(w, n)).then(list => {
+      if (!list) return; save("cs_lookup", { wa: w, nama: n });
+      $("#tList").innerHTML = `<h3 style="margin-top:18px">${t("tr.results", { n: list.length })}</h3><div class="olist">${list.map(o => ocard(o, w)).join("")}</div>`;
+      if (list.length === 1) openOrder(list[0].kode, w);
+    }).catch(e => { $("#tMsg").innerHTML = notice(em(e), "error"); });
+  };
+  $("#tgo2").onclick = () => {
+    bad = false; const w = $("#tw").value.trim(), k = $("#tk").value.trim().toUpperCase();
+    chk("t-wa", !!normWa(w), t("v.wa")); chk("t-kode", k.length >= 5, t("v.code")); if (bad) return;
+    openOrder(k, w, $("#tgo2"));
+  };
+  if (prefill) { const r = recent.find(x => x.kode === prefill && x.wa); if (r) openOrder(prefill, r.wa); else if (S.cust) openOrder(prefill, S.cust.whatsapp); else $("#byCode").open = true; }
 }
 
 /* ---------- Akun pelanggan (opsional) ---------- */
@@ -633,7 +702,7 @@ function vAuth() {
       <div id="aMsg"></div><button class="btn" id="aGo" data-loading="${esc(t("au.creating"))}">${t("au.create")}</button>`
   };
   let tab = "in";
-  show(`<section class="section"><div class="card" style="max-width:480px;margin:0 auto"><h1 style="font-size:1.6rem">${t("au.title")}</h1><p class="muted">${t("au.optional")}</p>
+  show(`<section class="section" style="max-width:480px;margin:0 auto">${pageHead(t("au.title"), { href: "#/" })}<div class="card"><p class="muted">${t("au.optional")}</p>
     <div class="admin-tabs" role="tablist"><button role="tab" data-t="in">${t("au.signin")}</button><button role="tab" data-t="up">${t("au.create")}</button></div>
     <div id="authBox"></div><p style="margin:16px 0 0"><a href="#/">${t("au.guest")}</a></p></div></section>`);
   let bad = false;
@@ -663,9 +732,9 @@ function doLogout() { return A.cust.logout().then(() => { S.cust = null; updateA
 function vAccount(qs) {
   if (!S.cust) { location.hash = "#/masuk"; return; }
   const addrView = () => S.cust.alamat ? `${esc(S.cust.alamat)}, ${esc(S.cust.kota)}` : t("ac.addr.none");
-  show(`<section class="section"><h1>${t("nav.account")}</h1><div class="card" style="max-width:680px;margin-bottom:18px"><p style="margin:0"><b>${esc(S.cust.nama)}</b><br>${esc(S.cust.email)}<br>WhatsApp: +${esc(S.cust.whatsapp)}</p>
+  show(`<section class="section mid">${pageHead(t("nav.account"), { href: "#/" })}<div class="card" style="margin-bottom:18px"><p style="margin:0"><b>${esc(S.cust.nama)}</b><br>${esc(S.cust.email)}<br>WhatsApp: +${esc(S.cust.whatsapp)}</p>
     <button class="btn sm ghost" id="out" style="margin-top:12px">${t("au.signout")}</button></div>
-    <div class="card" style="max-width:680px;margin-bottom:18px"><h3>${t("ac.addr")}</h3><p class="muted" id="addrView">${addrView()}</p><button class="btn sm ghost" id="addrEdit">${t("ac.addr.edit")}</button>
+    <div class="card" style="margin-bottom:18px"><h3>${t("ac.addr")}</h3><p class="muted" id="addrView">${addrView()}</p><button class="btn sm ghost" id="addrEdit">${t("ac.addr.edit")}</button>
       <div id="addrForm" hidden style="margin-top:12px">${locUi()}
         <div class="field" id="ad-alamat"><label for="adAlamat">${t("co.addr")}</label><textarea id="adAlamat" maxlength="300">${esc(S.cust.alamat || "")}</textarea><div class="err"></div></div>
         <div class="field" id="ad-kota"><label for="adKota">${t("co.city")}</label><input id="adKota" maxlength="60" value="${esc(S.cust.kota || "")}"><div class="err"></div></div>
@@ -684,8 +753,8 @@ function vAccount(qs) {
   };
   const open = (kode, btn) => A.busy(btn, () => A.trackOrder(kode, "")).then(o => { if (!o) return; $("#mineRes").innerHTML = orderResult(o); bindReviews($("#mineRes"), { kode: o.kode, o }); updateFab(t("wa.ask.order", { kode: o.kode })); $("#mineRes").scrollIntoView({ behavior: "smooth" }); }).catch(er => toast(em(er), "error"));
   A.cust.orders().then(list => {
-    $("#mine").innerHTML = list.length ? `<div class="card tablewrap" style="max-width:680px"><table><thead><tr><th>${t("ac.no")}</th><th>${t("ac.date")}</th><th>${t("sum.total")}</th><th>${t("done.status")}</th><th></th></tr></thead><tbody>${list.map(o => `<tr><td>${esc(o.kode)}</td><td>${esc(String(o.dibuat).slice(0, 10))}</td><td>${rp(o.total)}</td><td><span class="pill">${esc(st(o.status))}</span></td><td><button class="btn sm ghost" data-k="${esc(o.kode)}">${t("ac.detail")}</button></td></tr>`).join("")}</tbody></table></div>`
-      : `<div class="card" style="max-width:680px"><p class="muted" style="margin:0">${t("ac.none")}</p></div>`;
+    $("#mine").innerHTML = list.length ? `<div class="card tablewrap"><table><thead><tr><th>${t("ac.no")}</th><th>${t("ac.date")}</th><th>${t("sum.total")}</th><th>${t("done.status")}</th><th></th></tr></thead><tbody>${list.map(o => `<tr><td>${esc(o.kode)}</td><td>${esc(String(o.dibuat).slice(0, 10))}</td><td>${rp(o.total)}</td><td><span class="pill">${esc(st(o.status))}</span></td><td><button class="btn sm ghost" data-k="${esc(o.kode)}">${t("ac.detail")}</button></td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="card"><p class="muted" style="margin:0">${t("ac.none")}</p></div>`;
     if (qs && qs.kode) open(qs.kode, null);
   }).catch(e => { if (e.code === "UNAUTHORIZED") { S.cust = null; updateAcct(); location.hash = "#/masuk"; } else $("#mine").innerHTML = notice(em(e), "error"); });
   $("#mine").onclick = ev => { const b = ev.target.closest("button[data-k]"); if (b) open(b.dataset.k, b); };
@@ -697,7 +766,7 @@ function returnCard() { // dipakai di dalam halaman Bantuan
   const txt = (lang === "en" && s.info_retur_en) ? s.info_retur_en : (s.info_retur || "");
   const custom = String(txt).split("\n").map(x => x.trim()).filter(Boolean);
   const steps = custom.length ? custom : [1, 2, 3, 4, 5].map(i => t("rt.step" + i, { days }));
-  return `<div class="card" id="returSection" style="max-width:760px;margin-bottom:16px"><h2>${t("rt.title")}</h2><p class="muted">${t("rt.intro", { days })}</p>
+  return `<div class="card" id="returSection" style="margin-bottom:16px"><h2>${t("rt.title")}</h2><p class="muted">${t("rt.intro", { days })}</p>
     <ol class="rsteps">${steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="#/lacak">${t("rt.cta")}</a>${waA(t("wa.ask.return"), "&#128172; " + t("wa.contact"), "btn ghost")}</div></div>`;
 }
@@ -706,11 +775,11 @@ function returnCard() { // dipakai di dalam halaman Bantuan
 function vInfo(toRetur) {
   const s = S.settings, wa = waNum();
   const contact = [wa ? "WhatsApp: +" + esc(wa) : "", s.email_toko ? "Email: " + esc(s.email_toko) : "", s.jam_operasional ? esc(s.jam_operasional) : ""].filter(Boolean);
-  show(`<section class="section"><div class="card" style="max-width:760px;margin-bottom:16px" id="faqSection"><h1>${t("nav.help")}</h1>
+  show(`<section class="section narrow">${pageHead(t("nav.help"), { href: "#/" })}<div class="card" style="margin-bottom:16px" id="faqSection">
     <div class="chips"><button type="button" class="chip" data-go="faqSection">${t("help.faq")}</button><button type="button" class="chip" data-go="returSection">${t("rt.title")}</button><button type="button" class="chip" data-go="contactSection">${t("f.contact")}</button></div>
     ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `<details ${i === 1 ? "open" : ""}><summary><b>${t("faq.q" + i)}</b></summary><p>${t("faq.a" + i)}</p></details>`).join("")}</div>
     ${returnCard()}
-    <div class="card" id="contactSection" style="max-width:760px"><h2>${t("f.contact")}</h2>${contact.length ? `<ul>${contact.map(c => `<li>${c}</li>`).join("")}</ul>` : ""}<p>${waA(t("wa.ask.general"), "&#128172; " + t("wa.contact"), "btn")}</p></div></section>`);
+    <div class="card" id="contactSection"><h2>${t("f.contact")}</h2>${contact.length ? `<ul>${contact.map(c => `<li>${c}</li>`).join("")}</ul>` : ""}<p>${waA(t("wa.ask.general"), "&#128172; " + t("wa.contact"), "btn")}</p></div></section>`);
   app.onclick = e => { const b = e.target.closest("[data-go]"); if (!b) return; const el = $("#" + b.dataset.go); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
   if (toRetur) setTimeout(() => { const el = $("#returSection"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50);
 }
@@ -757,7 +826,6 @@ $("#searchForm").onsubmit = e => { e.preventDefault(); const q = $("#q").value.t
 /* ---------- Mode: gerbang pilihan, toko, admin (satu tautan) ---------- */
 function setMode(m) {
   $("#gate").hidden = m !== "gate"; $("#shop").hidden = m !== "shop"; $("#admin").hidden = m !== "admin"; closeAll();
-  try { sessionStorage.setItem(MODE_KEY, m); } catch (e) {}
   window.scrollTo(0, 0);
   if (m === "shop") { route(); visitOnce(); } else if (m === "admin") window.CSAdmin.start();
 }
@@ -767,16 +835,14 @@ $("#gAdmin").onclick = () => setMode("admin");
 $("#admShop").onclick = () => { location.hash = "#/"; setMode("shop"); };
 $("#admGate").onclick = () => setMode("gate");
 $("#skip").onclick = () => { (!$("#shop").hidden ? $("#app") : !$("#admin").hidden ? $("#adm") : $("#gGuest")).focus(); };
-$$(".themebtn").forEach(b => { b.onclick = () => applyTheme(curTheme() === "dark" ? "light" : "dark", true); });
+$$("[data-theme-set]").forEach(b => { b.onclick = () => applyTheme(b.dataset.themeSet, true); });
 try { const mq = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)"); if (mq && mq.addEventListener) mq.addEventListener("change", e => { let saved = null; try { saved = localStorage.getItem(THEME_KEY); } catch (x) {} if (!saved) applyTheme(e.matches ? "dark" : "light", false); }); } catch (e) {}
 $$(".lang button").forEach(b => { b.onclick = () => setLang(b.dataset.l); });
 window.addEventListener("hashchange", () => { route(); });
 
-let startMode = "gate";
-try { startMode = sessionStorage.getItem(MODE_KEY) || "gate"; } catch (e) {}
-if (["gate", "shop", "admin"].indexOf(startMode) < 0) startMode = "gate";
 applyStatic(); updateAcct(); updateBadge();
-setMode(startMode);
+setMode("gate"); // beranda dan menu baru tampil setelah pengunjung memilih cara masuk
+ensureData().catch(() => {}); // data dimuat lebih dulu selagi pengunjung memilih, sehingga beranda langsung muncul
 if (A.cust.has()) { // pulihkan sesi akun tanpa menghambat tampilan awal
   A.cust.session().then(r => { S.cust = r.profil; updateAcct(); if (!$("#shop").hidden) route(); }).catch(() => {});
 }

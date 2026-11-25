@@ -168,12 +168,13 @@ function vReviews(pane) {
 /* ---------- Pengaturan toko ---------- */
 function vSettings(pane) {
   const F = [["nama_toko", "Nama toko"], ["slogan", "Slogan"], ["whatsapp_toko", "Nomor WhatsApp toko (contoh 081234567890)"], ["email_toko", "Email toko"], ["alamat_toko", "Alamat toko"], ["jam_operasional", "Jam operasional"],
-    ["info_pengiriman", "Informasi pengiriman"], ["gratis_ongkir_min", "Gratis ongkir mulai belanja (Rp, isi 0 jika tidak ada promo)"], ["info_transfer", "Info transfer cadangan (dipakai hanya jika tidak ada bank aktif di bawah)"], ["hari_proses", "Lama pemrosesan sebelum dikirim (hari kerja, dipakai untuk estimasi tiba)"], ["cod_maks", "Batas total pesanan untuk COD (Rp, isi 0 jika tanpa batas)"], ["retur_hari", "Batas hari pengajuan retur setelah pesanan selesai"], ["info_retur", "Langkah cara retur (satu langkah per baris; kosongkan untuk memakai teks bawaan)"], ["info_retur_en", "Cara retur dalam English (kosongkan untuk terjemahan otomatis)"], ["qris_gambar", "Gambar QRIS (contoh assets/qris.png, tautan https, atau tautan Google Drive)"]];
+    ["info_pengiriman", "Informasi pengiriman"], ["gratis_ongkir_min", "Gratis ongkir mulai belanja (Rp, isi 0 jika tidak ada promo)"], ["info_transfer", "Info transfer cadangan (dipakai hanya jika tidak ada bank aktif di bawah)"], ["email_notifikasi", "Email notifikasi pesanan (alamat Gmail admin; pesanan baru, pembatalan, dan retur dikirim ke sini)"], ["batal_menit", "Batas waktu pembatalan oleh pelanggan (menit sejak pesanan dibuat; isi 0 untuk menonaktifkan)"], ["hari_proses", "Lama pemrosesan sebelum dikirim (hari kerja, dipakai untuk estimasi tiba)"], ["cod_maks", "Batas total pesanan untuk COD (Rp, isi 0 jika tanpa batas)"], ["retur_hari", "Batas hari pengajuan retur setelah pesanan selesai"], ["info_retur", "Langkah cara retur (satu langkah per baris; kosongkan untuk memakai teks bawaan)"], ["info_retur_en", "Cara retur dalam English (kosongkan untuk terjemahan otomatis)"], ["qris_gambar", "Gambar QRIS (contoh assets/qris.png, tautan https, atau tautan Google Drive)"]];
   return call("adminGetSettings").then(s => {
     setTimeout(() => bankCard(pane), 0);
-    pane.innerHTML = `<div class="card" style="max-width:680px"><h2>Pengaturan toko</h2><p class="muted">Tarif ongkir per jasa kirim diatur di tab Jasa kirim. Untuk QRIS: unggah gambar QRIS ke folder assets di GitHub (misalnya assets/qris.png), lalu isi kolom Gambar QRIS dengan assets/qris.png. Selama kolom itu kosong, QRIS tidak bisa dipilih pelanggan.</p>
+    setTimeout(() => { const b = $("#sMail"); if (b) b.onclick = () => API.busy(b, () => call("adminTestEmail")).then(r => { if (r) $("#sMsg").innerHTML = notice("Email uji berhasil dikirim. Silakan periksa kotak masuk (atau folder spam).", "ok"); }).catch(e => { $("#sMsg").innerHTML = notice(e.message, "error"); }); }, 0);
+    pane.innerHTML = `<div class="card"><h2>Pengaturan toko</h2><p class="muted">Tarif ongkir per jasa kirim diatur di tab Jasa kirim. Untuk QRIS: unggah gambar QRIS ke folder assets di GitHub (misalnya assets/qris.png), lalu isi kolom Gambar QRIS dengan assets/qris.png. Selama kolom itu kosong, QRIS tidak bisa dipilih pelanggan.</p>
       ${F.map(f => (f[0] === "info_retur" || f[0] === "info_retur_en") ? `<div class="field"><label for="s_${f[0]}">${f[1]}</label><textarea id="s_${f[0]}" maxlength="1500">${esc(s[f[0]] || "")}</textarea></div>` : `<div class="field"><label for="s_${f[0]}">${f[1]}</label><input id="s_${f[0]}" value="${esc(s[f[0]] || "")}" maxlength="400"></div>`).join("")}
-      <div id="sMsg"></div><button class="btn" id="sSave" data-loading="Menyimpan...">Simpan pengaturan</button></div>`;
+      <div id="sMsg"></div><button class="btn" id="sSave" data-loading="Menyimpan...">Simpan pengaturan</button> <button class="btn ghost" id="sMail" data-loading="Mengirim..." type="button">Kirim email uji</button><p class="muted" style="margin-top:10px">Agar email dapat terkirim: setelah mengisi email notifikasi, jalankan fungsi <b>setup</b> di editor Apps Script sekali dan setujui izin pengiriman email, lalu terapkan versi baru deployment. Kuota email Gmail biasa sekitar 100 per hari.</p></div>`;
     $("#sSave").onclick = () => {
       const d = {}; F.forEach(f => { d[f[0]] = $("#s_" + f[0]).value; });
       API.busy($("#sSave"), () => call("adminSaveSettings", d)).then(r => { if (r) { $("#sMsg").innerHTML = notice("Pengaturan tersimpan.", "ok"); toast("Pengaturan tersimpan.", "ok"); } })
@@ -189,7 +190,7 @@ function crow(k) {
 }
 function vCouriers(pane) {
   return call("adminListCouriers").then(list => {
-    pane.innerHTML = `<div class="card" style="max-width:860px"><h2>Jasa kirim dan ongkir</h2><p class="muted">Setiap jasa kirim punya tarif sendiri yang kamu tetapkan. Tarif ini bukan hasil hitung real-time dari kurir. Pelanggan memilih jasa kirim saat checkout dan hanya jasa kirim yang aktif yang tampil.</p>
+    pane.innerHTML = `<div class="card"><h2>Jasa kirim dan ongkir</h2><p class="muted">Setiap jasa kirim punya tarif sendiri yang kamu tetapkan. Tarif ini bukan hasil hitung real-time dari kurir. Pelanggan memilih jasa kirim saat checkout dan hanya jasa kirim yang aktif yang tampil.</p>
       <div id="clist">${list.map(crow).join("")}</div><button type="button" class="btn sm ghost" id="addC">Tambah jasa kirim</button>
       <div id="cMsg" style="margin:12px 0"></div><button class="btn" id="cSave" data-loading="Menyimpan...">Simpan jasa kirim</button></div>`;
     $("#addC").onclick = () => $("#clist").insertAdjacentHTML("beforeend", crow());
@@ -224,7 +225,7 @@ function arow(a, prods) {
 function vAds(pane) {
   return Promise.all([call("adminListAds"), call("adminListProducts")]).then(res => {
     const list = res[0], prods = res[1];
-    pane.innerHTML = `<div style="max-width:860px"><h2>Iklan di beranda</h2><p class="muted">Iklan tampil di beranda dengan label "Iklan". Maksimal 6. Banner <b>GRATIS ONGKIR</b> muncul otomatis dari pengaturan toko (kolom Gratis ongkir mulai belanja), jadi tidak perlu dibuat di sini. Pilih tujuan iklan dari daftar agar tautan produk selalu benar.</p>
+    pane.innerHTML = `<div><h2>Iklan di beranda</h2><p class="muted">Iklan tampil di beranda dengan label "Iklan". Maksimal 6. Banner <b>GRATIS ONGKIR</b> muncul otomatis dari pengaturan toko (kolom Gratis ongkir mulai belanja), jadi tidak perlu dibuat di sini. Pilih tujuan iklan dari daftar agar tautan produk selalu benar.</p>
       <div id="alist">${list.map(a => arow(a, prods)).join("")}</div><button type="button" class="btn sm ghost" id="addA">Tambah iklan</button>
       <div id="aMsg" style="margin:12px 0"></div><button class="btn" id="aSave" data-loading="Menyimpan...">Simpan iklan</button></div>`;
     $("#addA").onclick = () => { if (document.querySelectorAll("#alist .arow").length >= 6) return toast("Maksimal 6 iklan.", "error"); $("#alist").insertAdjacentHTML("beforeend", arow(null, prods)); };
@@ -242,20 +243,53 @@ function vAds(pane) {
   });
 }
 
-/* ---------- Laporan pengunjung ---------- */
+/* ---------- Laporan: grafik harian, bulanan, dan perkiraan ---------- */
+const BLN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const fmtBulan = ym => BLN[Number(ym.slice(5, 7)) - 1] + " " + ym.slice(0, 4);
+const niceMax = m => { const p = Math.pow(10, Math.floor(Math.log10(m))), f = m / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+const SERIES = [["v", "Pengunjung"], ["c", "Memasukkan ke keranjang"], ["p", "Pesanan dibuat"]];
+function chartFrame(W, H, pl, pt, pb, nice, body, summary) {
+  let g = ""; for (let i = 0; i <= 4; i++) { const v = nice / 4 * i, y = pt + (H - pt - pb) * (1 - v / nice); g += `<line class="gridl" x1="${pl}" x2="${W - 8}" y1="${y}" y2="${y}"/><text x="${pl - 6}" y="${y + 4}" text-anchor="end">${Math.round(v * 10) / 10}</text>`; }
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(summary)}">${g}${body}</svg>`;
+}
+function lineChart(labels, data) { // data: {v:[], c:[], p:[]}
+  const W = 760, H = 270, pl = 38, pr = 12, pt = 12, pb = 30, max = Math.max(1, ...Object.values(data).flat()), nice = niceMax(max);
+  const x = i => pl + (labels.length < 2 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (labels.length - 1)), y = v => pt + (H - pt - pb) * (1 - v / nice);
+  const step = labels.length > 16 ? 3 : 1;
+  let body = labels.map((l, i) => (i % step === 0 || i === labels.length - 1) ? `<text x="${x(i)}" y="${H - 10}" text-anchor="middle">${esc(l)}</text>` : "").join("");
+  SERIES.forEach(([k, name]) => {
+    body += `<polyline class="ln l-${k}" points="${data[k].map((v, i) => x(i) + "," + y(v)).join(" ")}"/>`;
+    body += data[k].map((v, i) => `<circle class="c-${k}" cx="${x(i)}" cy="${y(v)}" r="3"><title>${esc(name)}, tanggal ${esc(labels[i])}: ${v}</title></circle>`).join("");
+  });
+  return chartFrame(W, H, pl, pt, pb, nice, body, "Grafik garis harian pengunjung, keranjang, dan pesanan");
+}
+function barChart(labels, data) {
+  const W = 760, H = 270, pl = 38, pr = 8, pt = 12, pb = 30, max = Math.max(1, ...Object.values(data).flat()), nice = niceMax(max);
+  const gw = (W - pl - pr) / labels.length, bw = Math.min(26, (gw - 14) / 3);
+  let body = "";
+  labels.forEach((l, i) => {
+    const x0 = pl + i * gw + (gw - bw * 3) / 2;
+    body += `<text x="${pl + i * gw + gw / 2}" y="${H - 10}" text-anchor="middle">${esc(l)}</text>`;
+    SERIES.forEach(([k, name], j) => { const v = data[k][i], h = (H - pt - pb) * v / nice; body += `<rect class="c-${k}" x="${x0 + j * bw}" y="${H - pb - h}" width="${bw - 2}" height="${h}" rx="3"><title>${esc(name)}, ${esc(l)}: ${v}</title></rect>`; });
+  });
+  return chartFrame(W, H, pl, pt, pb, nice, body, "Grafik batang perbandingan 6 bulan terakhir");
+}
+const legend = () => `<div class="legend">${SERIES.map(([k, n]) => `<span><i class="c-${k}"></i>${n}</span>`).join("")}</div>`;
 function vReport(pane) {
-  const days = vReport.days || 7;
-  return call("adminReport", { days }).then(r => {
-    const max = Math.max(1, r.pengunjung, r.keranjang, r.pesanan), pct = v => v == null ? "-" : v + "%";
-    const bar = (label, n) => `<div class="fn"><span>${label}</span><div class="fbar"><i style="width:${Math.round(n / max * 100)}%"></i></div><b>${n}</b></div>`;
-    pane.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px"><h2 style="margin:0">Laporan</h2><div style="min-width:200px"><label for="rd">Periode</label><select id="rd"><option value="1" ${days === 1 ? "selected" : ""}>Hari ini</option><option value="7" ${days === 7 ? "selected" : ""}>7 hari terakhir</option><option value="30" ${days === 30 ? "selected" : ""}>30 hari terakhir</option></select></div></div>
-      <div class="stats"><div class="card stat"><span class="muted">Pengunjung</span><b>${r.pengunjung}</b></div><div class="card stat"><span class="muted">Memasukkan ke keranjang</span><b>${r.keranjang}</b></div>
-        <div class="card stat"><span class="muted">Pesanan dibuat</span><b>${r.pesanan}</b></div><div class="card stat"><span class="muted">Pesanan terbayar</span><b>${r.terbayar}</b></div><div class="card stat"><span class="muted">Omzet terbayar</span><b>${rp(r.omzet)}</b></div></div>
-      <div class="card" style="margin-bottom:16px"><h3>Alur dari pengunjung sampai pembelian</h3>${bar("Pengunjung", r.pengunjung)}${bar("Masukkan keranjang", r.keranjang)}${bar("Pesanan dibuat", r.pesanan)}
-        <p class="muted" style="margin:8px 0 0">Keranjang dari pengunjung: ${pct(r.konv_keranjang)}. Pesanan dari pengunjung: ${pct(r.konv_pesanan)}.</p></div>
-      <div class="card tablewrap"><table><thead><tr><th>Tanggal</th><th>Pengunjung</th><th>Memasukkan keranjang</th><th>Aksi tambah keranjang</th><th>Pesanan</th><th>Terbayar</th></tr></thead><tbody>${r.harian.slice().reverse().map(h => `<tr><td>${esc(h.tanggal)}</td><td>${h.pengunjung}</td><td>${h.keranjang}</td><td>${h.aksi_keranjang}</td><td>${h.pesanan}</td><td>${h.terbayar}</td></tr>`).join("")}</tbody></table></div>
-      <p class="muted" style="margin-top:12px">Catatan: pengunjung dihitung per <b>browser/perangkat</b> (ID acak di perangkat, tanpa data pribadi), bukan per orang, dan sekitar satu kali per hari per perangkat. Orang yang memblokir penyimpanan browser bisa terhitung lebih dari sekali atau tidak terhitung. Pesanan dan omzet dihitung dari sheet Pesanan (tanpa pesanan dibatalkan). Statistik baru terisi sejak versi ini dipasang.</p>`;
-    $("#rd").onchange = e => { vReport.days = Number(e.target.value); render(); };
+  return call("adminCharts", vReport.month ? { month: vReport.month } : {}).then(r => {
+    const sel = r.bulanan.find(m => m.bulan === r.bulan), idx = r.bulanan.indexOf(sel), prev = idx > 0 ? r.bulanan[idx - 1] : null;
+    const diff = (a, b) => (b === null || b === undefined || !b) ? "" : `<span class="muted"> ${a >= b ? "naik" : "turun"} ${Math.abs(Math.round((a - b) / b * 100))}% dari ${fmtBulan(prev.bulan)}</span>`;
+    const stat = (label, v, d) => `<div class="card stat"><span class="muted">${label}</span><b>${v}</b>${d || ""}</div>`;
+    const days = r.harian.map(h => Number(h.tanggal.slice(8, 10)) + "");
+    const pj = r.proyeksi;
+    pane.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px"><h2 style="margin:0">Laporan</h2><div style="min-width:220px"><label for="rm">Bulan</label><select id="rm">${r.bulanan.slice().reverse().map(m => `<option value="${m.bulan}" ${m.bulan === r.bulan ? "selected" : ""}>${fmtBulan(m.bulan)}${m.bulan === r.bulan_ini ? " (bulan ini)" : ""}</option>`).join("")}</select></div></div>
+      <div class="stats">${stat("Pengunjung", sel.pengunjung, diff(sel.pengunjung, prev && prev.pengunjung))}${stat("Memasukkan ke keranjang", sel.keranjang, diff(sel.keranjang, prev && prev.keranjang))}${stat("Pesanan dibuat", sel.pesanan, diff(sel.pesanan, prev && prev.pesanan))}${stat("Omzet terbayar", rp(sel.omzet), "")}</div>
+      <div class="card" style="margin-bottom:16px"><h3>Per hari dalam ${fmtBulan(r.bulan)}</h3>${legend()}${lineChart(days, { v: r.harian.map(h => h.pengunjung), c: r.harian.map(h => h.keranjang), p: r.harian.map(h => h.pesanan) })}
+        <details style="margin-top:8px"><summary><b>Lihat tabel harian</b></summary><div class="tablewrap"><table><thead><tr><th>Tanggal</th><th>Pengunjung</th><th>Keranjang</th><th>Pesanan</th></tr></thead><tbody>${r.harian.map(h => `<tr><td>${esc(h.tanggal)}</td><td>${h.pengunjung}</td><td>${h.keranjang}</td><td>${h.pesanan}</td></tr>`).join("")}</tbody></table></div></details></div>
+      <div class="card" style="margin-bottom:16px"><h3>Perbandingan 6 bulan terakhir</h3>${legend()}${barChart(r.bulanan.map(m => fmtBulan(m.bulan).slice(0, 3) + " " + m.bulan.slice(2, 4)), { v: r.bulanan.map(m => m.pengunjung), c: r.bulanan.map(m => m.keranjang), p: r.bulanan.map(m => m.pesanan) })}</div>
+      ${pj ? `<div class="card" style="margin-bottom:16px"><h3>Perkiraan akhir ${fmtBulan(r.bulan_ini)}</h3><p style="margin:0">Berdasarkan rata-rata ${pj.hari_berjalan} hari berjalan dari ${pj.hari_total} hari: sekitar <b>${pj.pengunjung} pengunjung</b>, <b>${pj.keranjang} yang memasukkan ke keranjang</b>, dan <b>${pj.pesanan} pesanan</b>.</p><p class="muted" style="margin:8px 0 0">Ini perkiraan sederhana (rata-rata harian dikalikan jumlah hari), bukan jaminan. Jumlah pengunjung bulan depan tidak dapat dihitung sebelum bulannya berjalan.</p></div>` : ""}
+      <p class="muted">Pengunjung dihitung per browser/perangkat (ID acak tanpa data pribadi), kira-kira satu kali per hari per perangkat, bukan jumlah orang yang pasti. Pesanan dan omzet berasal dari sheet Pesanan (tanpa pesanan dibatalkan). Statistik terisi sejak versi ini dipasang.</p>`;
+    $("#rm").onchange = e => { vReport.month = e.target.value; render(); };
   });
 }
 
@@ -265,7 +299,7 @@ const waLink = (num, text) => "https://wa.me/" + String(num).replace(/\D/g, "") 
 function vAfterSales(pane) {
   return call("adminAfterSales").then(d => {
     const msg = a => `Halo ${a.nama}, ini Cacutie Style. Pesanan ${a.kode} sudah sampai ya? Apakah produknya sesuai dengan yang dipesan? Kalau ada masalah (ukuran, kondisi barang, atau lainnya), kabari kami di sini ya. Terima kasih sudah berbelanja!`;
-    pane.innerHTML = `<h2>After Sales</h2><p class="muted" style="max-width:760px">Setelah paket sampai, hubungi pembeli lewat WhatsApp untuk menanyakan apakah produk sesuai dan ada masalah atau tidak. Tombol <b>Chat WhatsApp</b> membuka WhatsApp dengan pesan yang sudah terisi, lalu kamu menekan kirim sendiri (pesan tidak terkirim otomatis). Setelah itu catat hasilnya agar pesanan keluar dari antrean.</p>
+    pane.innerHTML = `<h2>After Sales</h2><p class="muted">Setelah paket sampai, hubungi pembeli lewat WhatsApp untuk menanyakan apakah produk sesuai dan ada masalah atau tidak. Tombol <b>Chat WhatsApp</b> membuka WhatsApp dengan pesan yang sudah terisi, lalu kamu menekan kirim sendiri (pesan tidak terkirim otomatis). Setelah itu catat hasilnya agar pesanan keluar dari antrean.</p>
       <div class="card" style="margin-bottom:16px"><h3>Perlu follow-up (${d.antrean.length})</h3>${d.antrean.length ? `<div class="tablewrap"><table><thead><tr><th>Pesanan</th><th>Pembeli</th><th>Status</th><th>Sejak</th><th></th></tr></thead><tbody>${d.antrean.map(a => `<tr><td>${esc(a.kode)}</td><td>${esc(a.nama)}</td><td><span class="pill">${esc(a.status)}</span></td><td>${a.hari} hari</td><td style="white-space:nowrap"><a class="btn sm" target="_blank" rel="noopener" href="${waLink(a.whatsapp, msg(a))}">Chat WhatsApp</a> <button class="btn sm ghost" data-as="${esc(a.order_id)}" data-k="${esc(a.kode)}">Catat hasil</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='muted'>Tidak ada pesanan yang menunggu follow-up.</p>"}</div>
       <div class="card" style="margin-bottom:16px"><h3>Permintaan retur (${d.retur.filter(r => r.status === "Diajukan").length} baru)</h3>${d.retur.length ? d.retur.map(r => `<div class="card" style="margin-bottom:10px;background:var(--cream)" data-rid="${esc(r.retur_id)}"><b>${esc(r.kode)}</b> - ${esc(r.nama)} - ${esc(r.produk)}<br><span class="muted">Alasan: ${esc(r.alasan)}${r.catatan ? " - " + esc(r.catatan) : ""} (${esc(r.dibuat)})</span>
         <div class="row two" style="margin-top:8px"><div class="field"><label>Status</label><select>${STATUS_RETUR.map(x => `<option ${x === r.status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Catatan untuk pembeli</label><input maxlength="500" value="${esc(r.catatan_admin)}"></div></div>
@@ -295,7 +329,7 @@ function brow(b) {
 }
 function bankCard(pane) {
   call("adminListBanks").then(list => {
-    pane.insertAdjacentHTML("beforeend", `<div class="card" style="max-width:860px;margin-top:18px"><h2>Rekening bank untuk transfer</h2><p class="muted">Saat pelanggan memilih Transfer Bank, mereka memilih salah satu bank aktif di bawah. Isi nomor rekening dan atas nama <b>sebelum</b> mengaktifkan. Selama belum ada bank aktif, pelanggan melihat teks "Info transfer cadangan" di atas. Nomor rekening hanya tampil kepada pembeli setelah pesanan dibuat.</p>
+    pane.insertAdjacentHTML("beforeend", `<div class="card" style="margin-top:18px"><h2>Rekening bank untuk transfer</h2><p class="muted">Saat pelanggan memilih Transfer Bank, mereka memilih salah satu bank aktif di bawah. Isi nomor rekening dan atas nama <b>sebelum</b> mengaktifkan. Selama belum ada bank aktif, pelanggan melihat teks "Info transfer cadangan" di atas. Nomor rekening hanya tampil kepada pembeli setelah pesanan dibuat.</p>
       <datalist id="bankNames"><option value="BCA"><option value="BRI"><option value="BNI"><option value="Mandiri"><option value="BSI"><option value="CIMB Niaga"><option value="Permata"><option value="Jago"><option value="SeaBank"></datalist>
       <div id="blist">${list.map(brow).join("")}</div><button type="button" class="btn sm ghost" id="addB">Tambah bank</button><div id="bMsg" style="margin:12px 0"></div><button class="btn" id="bSave" data-loading="Menyimpan...">Simpan rekening bank</button></div>`);
     $("#addB").onclick = () => { if (document.querySelectorAll("#blist .brow").length >= 8) return toast("Maksimal 8 bank.", "error"); $("#blist").insertAdjacentHTML("beforeend", brow()); };
